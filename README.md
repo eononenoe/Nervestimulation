@@ -11,7 +11,7 @@ Nervestimulation/
 │   ├── db/              # 데이터베이스 모델 및 쿼리
 │   └── sms/             # SMS 알림 기능
 ├── frontend/            # Vue.js 웹 관리자 대시보드
-├── mobile/              # React Native 모바일 앱 (구현 예정)
+├── mobile/              # React Native 모바일 앱
 ├── wellsafer_app.html   # 모바일 앱 디자인 프로토타입
 └── main.py              # Flask 서버 진입점
 ```
