@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wellsafer v2 - 스마트밴드 신경자극 플랫폼</title>
+  
+  <!-- Vuetify & MDI -->
+  <link href="https://cdn.jsdelivr.net/npm/vuetify@3.4.0/dist/vuetify.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@mdi/font@7.3.67/css/materialdesignicons.min.css" rel="stylesheet">
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f5; }
+    
+    /* Layout */
+    .app-container { display: flex; min-height: 100vh; }
+    .sidebar { width: 180px; background: linear-gradient(180deg, #1a5c3a 0%, #257E53 100%); color: white; display: flex; flex-direction: column; }
+    .main-content { flex: 1; padding: 16px; overflow-y: auto; background: #f5f5f5; }
+    
+    /* Sidebar */
+    .logo { padding: 20px 16px; font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .nav-menu { flex: 1; padding: 8px 0; }
+    .nav-item { display: flex; align-items: center; padding: 12px 20px; color: rgba(255,255,255,0.8); cursor: pointer; transition: all 0.2s; font-size: 14px; }
+    .nav-item:hover { background: rgba(255,255,255,0.1); color: white; }
+    .nav-item.active { background: rgba(67, 227, 150, 0.2); color: #43E396; border-left: 3px solid #43E396; }
+    .nav-item i { margin-right: 12px; font-size: 18px; }
+    .sidebar-footer { padding: 16px; }
+    .sidebar-btn { width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; margin-bottom: 8px; }
+    .btn-mypage { background: #43E396; color: #1a5c3a; }
+    .btn-logout { background: #dc3545; color: white; }
+    
+    /* Cards */
+    .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
+    .card-header { padding: 12px 16px; font-weight: 600; font-size: 14px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+    
+    /* Time Card */
+    .time-card { background: linear-gradient(135deg, #257E53 0%, #1a5c3a 100%); color: white; padding: 20px; height: 100%; display: flex; flex-direction: column; justify-content: center; }
+    .time-date { font-size: 14px; opacity: 0.9; margin-bottom: 8px; }
+    .time-clock { font-size: 36px; font-weight: 700; font-family: 'Roboto Mono', monospace; }
+    
+    /* Weather Card */
+    .weather-card { padding: 16px; height: 100%; }
+    .weather-main { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+    .weather-icon { font-size: 48px; }
+    .weather-temp { font-size: 32px; font-weight: 700; color: #257E53; }
+    .weather-desc { color: #666; font-size: 13px; }
+    .weather-details { display: flex; gap: 24px; }
+    .weather-detail-item { text-align: center; }
+    .weather-detail-value { font-size: 18px; font-weight: 600; color: #333; }
+    .weather-detail-label { font-size: 11px; color: #888; }
+    
+    /* Alerts */
+    .alerts-list { max-height: calc(100% - 45px); overflow-y: auto; }
+    .alert-item { display: flex; align-items: center; padding: 10px 16px; border-bottom: 1px solid #f5f5f5; gap: 12px; cursor: pointer; transition: background 0.2s; }
+    .alert-item:hover { background: #f0fdf4; }
+    .alert-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .alert-dot.danger { background: #ef4444; }
+    .alert-dot.warning { background: #f59e0b; }
+    
+    /* Map */
+    .map-container { height: 100%; width: 100%; position: relative; }
+    .map-legend { position: absolute; bottom: 16px; left: 16px; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000; font-size: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .legend-item:last-child { margin-bottom: 0; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+    
+    /* Table */
+    .ws-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ws-table th { text-align: left; padding: 10px 12px; background: #f8f9fa; color: #666; font-weight: 500; border-bottom: 1px solid #eee; }
+    .ws-table td { padding: 10px 12px; border-bottom: 1px solid #f5f5f5; }
+    .ws-table tr:hover { background: #f0fdf4; }
+    .ws-table tr { cursor: pointer; }
+    
+    /* Chips */
+    .chip { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+    .chip-success { background: #dcfce7; color: #16a34a; }
+    .chip-warning { background: #fef3c7; color: #d97706; }
+    .chip-error { background: #fee2e2; color: #dc2626; }
+    .chip-grey { background: #f3f4f6; color: #6b7280; }
+    
+    /* Grid */
+    .row { display: flex; margin: -8px; flex-wrap: wrap; }
+    .col { padding: 8px; }
+    .col-3 { width: 25%; }
+    .col-4 { width: 33.333%; }
+    .col-5 { width: 41.666%; }
+    .col-6 { width: 50%; }
+    .col-12 { width: 100%; }
+    
+    /* Page Header */
+    .page-header { font-size: 18px; font-weight: 600; color: #333; margin-bottom: 16px; padding-left: 4px; }
+    
+    /* Detail Panel */
+    .detail-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1999; display: none; }
+    .detail-overlay.show { display: block; }
+    .detail-panel { position: fixed; top: 0; right: -500px; width: 480px; height: 100vh; background: white; z-index: 2000; transition: right 0.3s ease; overflow-y: auto; box-shadow: -4px 0 20px rgba(0,0,0,0.15); }
+    .detail-panel.show { right: 0; }
+    .detail-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: #257E53; color: white; }
+    .detail-header h2 { margin: 0; font-size: 18px; font-weight: 600; }
+    .detail-close { background: none; border: none; color: white; font-size: 24px; cursor: pointer; }
+    .detail-body { padding: 20px; }
+    .detail-section { margin-bottom: 24px; }
+    .detail-section-title { font-size: 14px; font-weight: 600; color: #333; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #eee; }
+    .detail-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .detail-info-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .detail-info-value { font-size: 14px; color: #333; font-weight: 500; }
+    
+    /* Vital Cards */
+    .vital-cards { display: flex; gap: 12px; margin-bottom: 16px; }
+    .vital-card { flex: 1; background: #f8f9fa; border-radius: 12px; padding: 16px; text-align: center; border: 1px solid #eee; }
+    .vital-card.warning { background: #fef3c7; border-color: #f59e0b; }
+    .vital-card.danger { background: #fee2e2; border-color: #ef4444; }
+    .vital-icon { font-size: 24px; margin-bottom: 8px; }
+    .vital-value { font-size: 24px; font-weight: 700; color: #257E53; }
+    .vital-card.warning .vital-value { color: #d97706; }
+    .vital-card.danger .vital-value { color: #dc2626; }
+    .vital-label { font-size: 11px; color: #888; margin-top: 4px; }
+    
+    /* Battery */
+    .battery-bar { width: 80px; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
+    .battery-fill { height: 100%; border-radius: 4px; }
+    
+    /* Stimulator Info */
+    .stimulator-info { background: #f0fdf4; border-radius: 12px; padding: 16px; border: 1px solid #86efac; }
+    .stimulator-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .stimulator-icon { width: 40px; height: 40px; background: #257E53; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    .stimulator-details { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #666; }
+    
+    /* Activity List */
+    .activity-list { }
+    .activity-item { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #f5f5f5; }
+    .activity-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .activity-dot.success { background: #10b981; }
+    .activity-dot.warning { background: #f59e0b; }
+    .activity-dot.danger { background: #ef4444; }
+    .activity-time { font-size: 12px; color: #888; width: 50px; }
+    .activity-text { font-size: 13px; color: #333; }
+    
+    /* Buttons */
+    .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+    .btn-primary { background: #257E53; color: white; }
+    .btn-primary:hover { background: #1a5c3a; }
+    .btn-outline { background: white; color: #257E53; border: 1px solid #257E53; }
+    .btn-outline:hover { background: #f0fdf4; }
+    .btn-block { width: 100%; }
+    
+    /* Detail Map */
+    .detail-map { height: 200px; border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+    
+    /* Chart */
+    .chart-container { height: calc(100% - 45px); padding: 8px; }
+    
+    /* Hide pages */
+    .page { display: none; }
+    .page.active { display: block; }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #999; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="app-container">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="logo">Wellsafer</div>
+        <nav class="nav-menu">
+          <div class="nav-item active" data-page="dashboard">
+            <i class="mdi mdi-view-dashboard"></i> 대시보드
+          </div>
+          <div class="nav-item" data-page="nervestim">
+            <i class="mdi mdi-flash"></i> 신경자극 관리
+          </div>
+          <div class="nav-item" data-page="bloodpressure">
+            <i class="mdi mdi-heart-pulse"></i> 혈압 관리
+          </div>
+          <div class="nav-item" data-page="report">
+            <i class="mdi mdi-chart-box"></i> 건강 리포트
+          </div>
+          <div class="nav-item" data-page="device">
+            <i class="mdi mdi-cellphone-link"></i> 기기 관리
+          </div>
+          <div class="nav-item" data-page="band">
+            <i class="mdi mdi-watch"></i> 밴드 조회
+          </div>
+          <div class="nav-item" data-page="user">
+            <i class="mdi mdi-account-group"></i> 사용자
+          </div>
+        </nav>
+        <div class="sidebar-footer">
+          <button class="sidebar-btn btn-mypage">MY PAGE</button>
+          <button class="sidebar-btn btn-logout">LOGOUT</button>
+        </div>
+      </div>
+      
+      <!-- Main Content -->
+      <div class="main-content">
+        <!-- Dashboard Page -->
+        <div class="page active" id="page-dashboard">
+          <div class="row">
+            <div class="col col-3">
+              <div class="card time-card">
+                <div class="time-date" id="currentDate"></div>
+                <div class="time-clock" id="currentTime"></div>
+              </div>
+            </div>
+            <div class="col col-5">
+              <div class="card weather-card">
+                <div class="weather-main">
+                  <div class="weather-icon">☀️</div>
+                  <div>
+                    <div class="weather-temp">-2°C</div>
+                    <div class="weather-desc">맑음 | 체감온도 -7°C</div>
+                  </div>
+                </div>
+                <div class="weather-details">
+                  <div class="weather-detail-item">
+                    <div class="weather-detail-value">45%</div>
+                    <div class="weather-detail-label">습도</div>
+                  </div>
+                  <div class="weather-detail-item">
+                    <div class="weather-detail-value">2.3m/s</div>
+                    <div class="weather-detail-label">풍속</div>
+                  </div>
+                  <div class="weather-detail-item">
+                    <div class="weather-detail-value">좋음</div>
+                    <div class="weather-detail-label">미세먼지</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col col-4">
+              <div class="card" style="height: 140px;">
+                <div class="card-header">생체 신호 이상 감지</div>
+                <div class="alerts-list">
+                  <div class="alert-item" onclick="openBandDetail(0)">
+                    <div class="alert-dot danger"></div>
+                    <div style="flex: 1;">
+                      <div style="font-weight: 500; font-size: 13px;">김영희</div>
+                      <div style="font-size: 11px; color: #666;">혈압 상승 - 152/98 mmHg</div>
+                    </div>
+                    <span class="chip chip-error">위험</span>
+                  </div>
+                  <div class="alert-item" onclick="openBandDetail(1)">
+                    <div class="alert-dot warning"></div>
+                    <div style="flex: 1;">
+                      <div style="font-weight: 500; font-size: 13px;">박철수</div>
+                      <div style="font-size: 11px; color: #666;">심박수 이상 - 108 BPM</div>
+                    </div>
+                    <span class="chip chip-warning">주의</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="row" style="margin-top: 8px;">
+            <div class="col col-12">
+              <div class="card" style="height: 340px; position: relative;">
+                <div id="dashboardMap" class="map-container"></div>
+                <div class="map-legend">
+                  <div class="legend-item">
+                    <div class="legend-dot" style="background: #1e40af;"></div>
+                    <span>관리자 위치</span>
+                  </div>
+                  <div class="legend-item">
+                    <div class="legend-dot" style="background: #10b981;"></div>
+                    <span>밴드 (온라인)</span>
+                  </div>
+                  <div class="legend-item">
+                    <div class="legend-dot" style="background: #9ca3af;"></div>
+                    <span>밴드 (오프라인)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="row" style="margin-top: 8px;">
+            <div class="col col-6">
+              <div class="card" style="height: 220px;">
+                <div class="card-header">이벤트 이력</div>
+                <div style="overflow-y: auto; max-height: 170px;">
+                  <table class="ws-table">
+                    <thead>
+                      <tr><th>이름</th><th>이벤트</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      <tr onclick="openBandDetail(0)"><td>김영희</td><td>배터리 충전 필요</td><td>15%</td></tr>
+                      <tr onclick="openBandDetail(1)"><td>박철수</td><td>네트워크 신호 약함</td><td></td></tr>
+                      <tr onclick="openBandDetail(2)"><td>이민수</td><td>미착용 감지</td><td></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="col col-6">
+              <div class="card" style="height: 220px;">
+                <div class="card-header">일주일간 생체신호 이상 건수</div>
+                <div class="chart-container">
+                  <canvas id="weeklyChart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Band Page -->
+        <div class="page" id="page-band">
+          <div class="page-header">밴드 조회</div>
+          <div class="card">
+            <table class="ws-table">
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>밴드 ID</th>
+                  <th>사용자</th>
+                  <th>상태</th>
+                  <th>심박수</th>
+                  <th>SpO2</th>
+                  <th>배터리</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr onclick="openBandDetail(0)">
+                  <td>1</td>
+                  <td>WS-2024-0001</td>
+                  <td>김영희</td>
+                  <td><span class="chip chip-success">연결</span></td>
+                  <td>72 BPM</td>
+                  <td>98%</td>
+                  <td>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <div class="battery-bar"><div class="battery-fill" style="width: 85%; background: #10b981;"></div></div>
+                      <span>85%</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr onclick="openBandDetail(1)">
+                  <td>2</td>
+                  <td>WS-2024-0002</td>
+                  <td>박철수</td>
+                  <td><span class="chip chip-success">연결</span></td>
+                  <td>108 BPM</td>
+                  <td>97%</td>
+                  <td>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <div class="battery-bar"><div class="battery-fill" style="width: 62%; background: #10b981;"></div></div>
+                      <span>62%</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr onclick="openBandDetail(2)">
+                  <td>3</td>
+                  <td>WS-2024-0003</td>
+                  <td>이민수</td>
+                  <td><span class="chip chip-grey">오프라인</span></td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <div class="battery-bar"><div class="battery-fill" style="width: 15%; background: #ef4444;"></div></div>
+                      <span style="color: #ef4444;">15%</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <!-- Nerve Stim Page -->
+        <div class="page" id="page-nervestim">
+          <div class="page-header">신경자극 관리</div>
+          <div class="row">
+            <div class="col col-3">
+              <div class="card" style="padding: 20px; text-align: center;">
+                <div style="font-size: 36px; font-weight: 700; color: #257E53;">24</div>
+                <div style="font-size: 13px; color: #888;">오늘 세션</div>
+              </div>
+            </div>
+            <div class="col col-3">
+              <div class="card" style="padding: 20px; text-align: center;">
+                <div style="font-size: 36px; font-weight: 700; color: #257E53;">3</div>
+                <div style="font-size: 13px; color: #888;">진행 중</div>
+              </div>
+            </div>
+            <div class="col col-3">
+              <div class="card" style="padding: 20px; text-align: center;">
+                <div style="font-size: 36px; font-weight: 700; color: #257E53;">-8.5</div>
+                <div style="font-size: 13px; color: #888;">평균 혈압 변화</div>
+              </div>
+            </div>
+            <div class="col col-3">
+              <div class="card" style="padding: 20px; text-align: center;">
+                <div style="font-size: 36px; font-weight: 700; color: #257E53;">92%</div>
+                <div style="font-size: 13px; color: #888;">성공률</div>
+              </div>
+            </div>
+          </div>
+          <div class="row" style="margin-top: 16px;">
+            <div class="col col-12">
+              <div class="card">
+                <div class="card-header">
+                  세션 기록
+                  <button class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">+ 새 세션</button>
+                </div>
+                <table class="ws-table">
+                  <thead>
+                    <tr>
+                      <th>세션 ID</th>
+                      <th>사용자</th>
+                      <th>프로토콜</th>
+                      <th>시작 시간</th>
+                      <th>혈압 (전→후)</th>
+                      <th>상태</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>NS-2024-0089</td>
+                      <td>김영희</td>
+                      <td>혈압 강하</td>
+                      <td>16:30</td>
+                      <td>152/98 → 138/88</td>
+                      <td><span class="chip chip-success">완료</span></td>
+                    </tr>
+                    <tr>
+                      <td>NS-2024-0088</td>
+                      <td>박철수</td>
+                      <td>혈압 강하</td>
+                      <td>16:15</td>
+                      <td>145/92 → -</td>
+                      <td><span class="chip chip-warning">진행중</span></td>
+                    </tr>
+                    <tr>
+                      <td>NS-2024-0087</td>
+                      <td>이민수</td>
+                      <td>혈류 안정화</td>
+                      <td>15:45</td>
+                      <td>138/85 → 128/80</td>
+                      <td><span class="chip chip-success">완료</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Blood Pressure Page -->
+        <div class="page" id="page-bloodpressure">
+          <div class="page-header">혈압 관리</div>
+          <div class="row">
+            <div class="col col-6">
+              <div class="card" style="height: 300px;">
+                <div class="card-header">혈압 추이</div>
+                <div class="chart-container">
+                  <canvas id="bpChart"></canvas>
+                </div>
+              </div>
+            </div>
+            <div class="col col-6">
+              <div class="card">
+                <div class="card-header">최근 측정 기록</div>
+                <table class="ws-table">
+                  <thead>
+                    <tr><th>일시</th><th>사용자</th><th>수축기</th><th>이완기</th><th>맥박</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>12/22 16:30</td><td>김영희</td><td style="color: #ef4444; font-weight: 600;">152</td><td>98</td><td>78</td></tr>
+                    <tr><td>12/22 16:15</td><td>박철수</td><td style="color: #f59e0b; font-weight: 600;">145</td><td>92</td><td>82</td></tr>
+                    <tr><td>12/22 15:45</td><td>이민수</td><td>128</td><td>80</td><td>72</td></tr>
+                    <tr><td>12/22 15:30</td><td>김영희</td><td>138</td><td>88</td><td>76</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Report Page -->
+        <div class="page" id="page-report">
+          <div class="page-header">건강 리포트</div>
+          <div class="card">
+            <div class="card-header">
+              리포트 목록
+              <button class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">+ 새 리포트</button>
+            </div>
+            <table class="ws-table">
+              <thead>
+                <tr><th>리포트 ID</th><th>사용자</th><th>기간</th><th>건강점수</th><th>생성일</th><th></th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>RPT-2024-0045</td>
+                  <td>김영희</td>
+                  <td>12/15 ~ 12/21</td>
+                  <td><span style="color: #257E53; font-weight: 700;">82</span>/100</td>
+                  <td>2024-12-22</td>
+                  <td><button class="btn btn-outline" style="padding: 6px 12px; font-size: 12px;">보기</button></td>
+                </tr>
+                <tr>
+                  <td>RPT-2024-0044</td>
+                  <td>박철수</td>
+                  <td>12/15 ~ 12/21</td>
+                  <td><span style="color: #f59e0b; font-weight: 700;">68</span>/100</td>
+                  <td>2024-12-22</td>
+                  <td><button class="btn btn-outline" style="padding: 6px 12px; font-size: 12px;">보기</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <!-- Device Page -->
+        <div class="page" id="page-device">
+          <div class="page-header">기기 관리</div>
+          <div class="row">
+            <div class="col col-6">
+              <div class="card">
+                <div class="card-header">스마트밴드</div>
+                <table class="ws-table">
+                  <thead>
+                    <tr><th>기기 ID</th><th>사용자</th><th>상태</th><th>배터리</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>WS-2024-0001</td><td>김영희</td><td><span class="chip chip-success">온라인</span></td><td>85%</td></tr>
+                    <tr><td>WS-2024-0002</td><td>박철수</td><td><span class="chip chip-success">온라인</span></td><td>62%</td></tr>
+                    <tr><td>WS-2024-0003</td><td>이민수</td><td><span class="chip chip-grey">오프라인</span></td><td>15%</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="col col-6">
+              <div class="card">
+                <div class="card-header">신경자극기</div>
+                <table class="ws-table">
+                  <thead>
+                    <tr><th>기기 ID</th><th>연결 밴드</th><th>상태</th><th>배터리</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>NS-2024-0001</td><td>WS-2024-0001</td><td><span class="chip chip-success">온라인</span></td><td>92%</td></tr>
+                    <tr><td>NS-2024-0002</td><td>WS-2024-0002</td><td><span class="chip chip-success">온라인</span></td><td>78%</td></tr>
+                    <tr><td>NS-2024-0003</td><td>-</td><td><span class="chip chip-grey">미연결</span></td><td>100%</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- User Page -->
+        <div class="page" id="page-user">
+          <div class="page-header">사용자 관리</div>
+          <div class="card">
+            <div class="card-header">
+              사용자 목록
+              <button class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">+ 사용자 추가</button>
+            </div>
+            <table class="ws-table">
+              <thead>
+                <tr><th>ID</th><th>이름</th><th>연락처</th><th>밴드</th><th>등록일</th><th>권한</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>U001</td><td>김영희</td><td>010-1234-5678</td><td>WS-2024-0001</td><td>2024-01-15</td><td><span class="chip chip-success">사용자</span></td></tr>
+                <tr><td>U002</td><td>박철수</td><td>010-2345-6789</td><td>WS-2024-0002</td><td>2024-02-20</td><td><span class="chip chip-success">사용자</span></td></tr>
+                <tr><td>U003</td><td>이민수</td><td>010-3456-7890</td><td>WS-2024-0003</td><td>2024-03-10</td><td><span class="chip chip-success">사용자</span></td></tr>
+                <tr><td>A001</td><td>관리자</td><td>010-0000-0000</td><td>-</td><td>2024-01-01</td><td><span class="chip chip-warning">관리자</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Detail Panel Overlay -->
+    <div class="detail-overlay" id="detailOverlay" onclick="closeBandDetail()"></div>
+    
+    <!-- Detail Panel -->
+    <div class="detail-panel" id="detailPanel">
+      <div class="detail-header">
+        <h2 id="detailTitle">김영희 - WS-2024-0001</h2>
+        <button class="detail-close" onclick="closeBandDetail()">×</button>
+      </div>
+      <div class="detail-body">
+        <!-- 기본 정보 -->
+        <div class="detail-section">
+          <div class="detail-section-title">기본 정보</div>
+          <div class="detail-info-grid">
+            <div>
+              <div class="detail-info-label">밴드 ID</div>
+              <div class="detail-info-value" id="detailBandId">WS-2024-0001</div>
+            </div>
+            <div>
+              <div class="detail-info-label">사용자</div>
+              <div class="detail-info-value" id="detailUserName">김영희</div>
+            </div>
+            <div>
+              <div class="detail-info-label">IMEI</div>
+              <div class="detail-info-value">356789012340001</div>
+            </div>
+            <div>
+              <div class="detail-info-label">펌웨어</div>
+              <div class="detail-info-value">v2.1.4</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 실시간 생체신호 -->
+        <div class="detail-section">
+          <div class="detail-section-title">실시간 생체신호</div>
+          <div class="vital-cards">
+            <div class="vital-card" id="vitalHr">
+              <div class="vital-icon">❤️</div>
+              <div class="vital-value">72</div>
+              <div class="vital-label">심박수 (BPM)</div>
+            </div>
+            <div class="vital-card">
+              <div class="vital-icon">💨</div>
+              <div class="vital-value" id="vitalSpo2">98%</div>
+              <div class="vital-label">SpO2</div>
+            </div>
+            <div class="vital-card" id="vitalBp">
+              <div class="vital-icon">🩺</div>
+              <div class="vital-value">128/82</div>
+              <div class="vital-label">혈압</div>
+            </div>
+          </div>
+          <div class="detail-info-grid">
+            <div>
+              <div class="detail-info-label">HRV</div>
+              <div class="detail-info-value">45 ms</div>
+            </div>
+            <div>
+              <div class="detail-info-label">스트레스</div>
+              <div class="detail-info-value">32</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 기기 상태 -->
+        <div class="detail-section">
+          <div class="detail-section-title">기기 상태</div>
+          <div class="detail-info-grid">
+            <div>
+              <div class="detail-info-label">연결</div>
+              <div class="detail-info-value"><span class="chip chip-success" id="detailStatus">연결됨</span></div>
+            </div>
+            <div>
+              <div class="detail-info-label">배터리</div>
+              <div class="detail-info-value">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <div class="battery-bar"><div class="battery-fill" id="detailBattery" style="width: 85%; background: #10b981;"></div></div>
+                  <span id="detailBatteryText">85%</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="detail-info-label">신호</div>
+              <div class="detail-info-value">-65 dBm (양호)</div>
+            </div>
+            <div>
+              <div class="detail-info-label">동기화</div>
+              <div class="detail-info-value">방금 전</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 연결된 신경자극기 -->
+        <div class="detail-section">
+          <div class="detail-section-title">연결된 신경자극기</div>
+          <div class="stimulator-info" id="stimulatorInfo">
+            <div class="stimulator-header">
+              <div class="stimulator-icon">⚡</div>
+              <div>
+                <div style="font-weight: 600;">NS-2024-0001</div>
+                <div style="font-size: 11px; color: #666;">MAC: AA:BB:CC:DD:01:01</div>
+              </div>
+              <span class="chip chip-success" style="margin-left: auto;">연결됨</span>
+            </div>
+            <div class="stimulator-details">
+              <div>배터리: 92%</div>
+              <div>오늘 세션: 2회</div>
+              <div>마지막 자극: 14:30</div>
+              <div>프로토콜: 혈압 강하</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 위치 정보 -->
+        <div class="detail-section">
+          <div class="detail-section-title">위치 정보</div>
+          <div class="detail-map" id="detailMap"></div>
+          <div class="detail-info-grid">
+            <div>
+              <div class="detail-info-label">좌표</div>
+              <div class="detail-info-value" style="font-size: 13px;" id="detailCoords">36.1200, 128.3460</div>
+            </div>
+            <div>
+              <div class="detail-info-label">위치 유형</div>
+              <div class="detail-info-value">실외 (GPS)</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 최근 활동 -->
+        <div class="detail-section">
+          <div class="detail-section-title">최근 활동</div>
+          <div class="activity-list">
+            <div class="activity-item">
+              <div class="activity-dot success"></div>
+              <div class="activity-time">16:30</div>
+              <div class="activity-text">신경자극 세션 완료</div>
+            </div>
+            <div class="activity-item">
+              <div class="activity-dot warning"></div>
+              <div class="activity-time">16:15</div>
+              <div class="activity-text">혈압 상승 감지</div>
+            </div>
+            <div class="activity-item">
+              <div class="activity-dot success"></div>
+              <div class="activity-time">16:00</div>
+              <div class="activity-text">신경자극 세션 시작</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 액션 버튼 -->
+        <div style="display: flex; gap: 12px; margin-top: 24px;">
+          <button class="btn btn-primary btn-block">신경자극 시작</button>
+          <button class="btn btn-outline btn-block">리포트 생성</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <script>
+    // Sample Band Data
+    const bands = [
+      { id: 'WS-2024-0001', user: '김영희', status: 'online', hr: 72, spo2: '98%', bp: '128/82', battery: 85 },
+      { id: 'WS-2024-0002', user: '박철수', status: 'online', hr: 108, spo2: '97%', bp: '145/92', battery: 62 },
+      { id: 'WS-2024-0003', user: '이민수', status: 'offline', hr: null, spo2: null, bp: null, battery: 15 }
+    ];
+
+    // 현재 위치 저장
+    let currentPosition = null;
+
+    // Weather Code를 설명과 아이콘으로 변환
+    const getWeatherInfo = (code) => {
+      const weatherMap = {
+        0: { desc: '맑음', icon: '☀️' },
+        1: { desc: '대체로 맑음', icon: '🌤️' },
+        2: { desc: '부분 흐림', icon: '⛅' },
+        3: { desc: '흐림', icon: '☁️' },
+        45: { desc: '안개', icon: '🌫️' },
+        48: { desc: '짙은 안개', icon: '🌫️' },
+        51: { desc: '가벼운 이슬비', icon: '🌦️' },
+        53: { desc: '이슬비', icon: '🌦️' },
+        55: { desc: '강한 이슬비', icon: '🌧️' },
+        61: { desc: '약한 비', icon: '🌧️' },
+        63: { desc: '비', icon: '🌧️' },
+        65: { desc: '강한 비', icon: '🌧️' },
+        71: { desc: '약한 눈', icon: '🌨️' },
+        73: { desc: '눈', icon: '❄️' },
+        75: { desc: '강한 눈', icon: '❄️' },
+        80: { desc: '소나기', icon: '🌦️' },
+        95: { desc: '뇌우', icon: '⛈️' }
+      };
+      return weatherMap[code] || { desc: '알 수 없음', icon: '🌡️' };
+    };
+
+    // 날씨 가져오기 (Open-Meteo API - 무료)
+    const fetchWeather = async (lat, lng) => {
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&timezone=Asia/Seoul`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.current) {
+          const current = data.current;
+          const weatherInfo = getWeatherInfo(current.weather_code);
+
+          document.querySelector('.weather-icon').textContent = weatherInfo.icon;
+          document.querySelector('.weather-temp').textContent = `${Math.round(current.temperature_2m)}°C`;
+          document.querySelector('.weather-desc').textContent = `${weatherInfo.desc} | 체감온도 ${Math.round(current.apparent_temperature)}°C`;
+          document.querySelectorAll('.weather-detail-value')[0].textContent = `${current.relative_humidity_2m}%`;
+          document.querySelectorAll('.weather-detail-value')[1].textContent = `${current.wind_speed_10m.toFixed(1)}m/s`;
+
+          console.log('Weather loaded:', current);
+        }
+      } catch (error) {
+        console.error('Failed to fetch weather:', error);
+      }
+    };
+
+    // IP 기반 위치 가져오기
+    const getPositionByIP = async () => {
+      try {
+        const response = await fetch('http://ip-api.com/json/?fields=lat,lon');
+        const data = await response.json();
+        if (data.lat && data.lon) {
+          console.log('IP-based position:', data.lat, data.lon);
+          return { lat: data.lat, lng: data.lon };
+        }
+      } catch (error) {
+        console.warn('IP location failed:', error);
+      }
+      return null;
+    };
+
+    // 현재 위치 가져오기
+    const getCurrentPosition = () => {
+      return new Promise(async (resolve) => {
+        if (currentPosition) {
+          resolve(currentPosition);
+          return;
+        }
+
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              currentPosition = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+              };
+              console.log('Geolocation success:', currentPosition);
+              resolve(currentPosition);
+            },
+            async (error) => {
+              console.warn('Geolocation failed:', error.message);
+              const ipPosition = await getPositionByIP();
+              if (ipPosition) {
+                currentPosition = ipPosition;
+                resolve(currentPosition);
+              } else {
+                // 기본 위치 (구미)
+                resolve({ lat: 36.1194, lng: 128.3446 });
+              }
+            },
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
+          );
+        } else {
+          const ipPosition = await getPositionByIP();
+          resolve(ipPosition || { lat: 36.1194, lng: 128.3446 });
+        }
+      });
+    };
+
+    // 주변 랜덤 좌표 생성
+    const generateNearbyPosition = (center, radiusKm = 0.5) => {
+      const r = radiusKm * Math.sqrt(Math.random());
+      const theta = Math.random() * 2 * Math.PI;
+      const latOffset = (r / 111) * Math.cos(theta);
+      const lngOffset = (r / (111 * Math.cos(center.lat * Math.PI / 180))) * Math.sin(theta);
+      return { lat: center.lat + latOffset, lng: center.lng + lngOffset };
+    };
+    
+    // Navigation
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', function() {
+        document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        this.classList.add('active');
+        const pageId = 'page-' + this.dataset.page;
+        document.getElementById(pageId).classList.add('active');
+        
+        // Initialize charts if needed
+        if (this.dataset.page === 'bloodpressure') {
+          initBpChart();
+        }
+      });
+    });
+    
+    // Time Update
+    function updateTime() {
+      const now = new Date();
+      const days = ['일', '월', '화', '수', '목', '금', '토'];
+      document.getElementById('currentDate').textContent = 
+        `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 ${days[now.getDay()]}요일`;
+      document.getElementById('currentTime').textContent = 
+        now.toLocaleTimeString('ko-KR', { hour12: false });
+    }
+    updateTime();
+    setInterval(updateTime, 1000);
+    
+    // Dashboard Map (Leaflet)
+    let dashboardMap = null;
+    async function initDashboardMap() {
+      // 현재 위치 가져오기
+      const currentPos = await getCurrentPosition();
+      console.log('Map center:', currentPos);
+
+      // 날씨 가져오기
+      await fetchWeather(currentPos.lat, currentPos.lng);
+      
+      dashboardMap = L.map('dashboardMap').setView([currentPos.lat, currentPos.lng], 15);
+      
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+      }).addTo(dashboardMap);
+      
+      // Admin marker (현재 위치)
+      const adminIcon = L.divIcon({
+        html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36">
+          <path fill="#257E53" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+          <circle cx="12" cy="9" r="3" fill="#1e40af"/>
+        </svg>`,
+        className: '',
+        iconSize: [36, 36],
+        iconAnchor: [18, 36]
+      });
+      
+      L.marker([currentPos.lat, currentPos.lng], { icon: adminIcon })
+        .addTo(dashboardMap)
+        .bindPopup('<b>현재 위치</b><br>관리자');
+      
+      // Band markers - 현재 위치 주변에 배치
+      bands.forEach((band, index) => {
+        const pos = generateNearbyPosition(currentPos, 0.2 + (index * 0.15));
+        band.lat = pos.lat;
+        band.lng = pos.lng;
+
+        const isOnline = band.status === 'online';
+        const bandIcon = L.divIcon({
+          html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32">
+            <path fill="#257E53" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            <circle cx="12" cy="9" r="3" fill="${isOnline ? '#10b981' : '#9ca3af'}"/>
+          </svg>`,
+          className: '',
+          iconSize: [32, 32],
+          iconAnchor: [16, 32]
+        });
+        
+        L.marker([band.lat, band.lng], { icon: bandIcon })
+          .addTo(dashboardMap)
+          .bindPopup(`<b>${band.user}</b><br>${band.id}<br>상태: ${isOnline ? '온라인' : '오프라인'}`)
+          .on('click', () => openBandDetail(index));
+      });
+    }
+    
+    // Weekly Chart
+    function initWeeklyChart() {
+      const ctx = document.getElementById('weeklyChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['12/16', '12/17', '12/18', '12/19', '12/20', '12/21', '12/22'],
+          datasets: [{
+            label: '이상 건수',
+            data: [3, 5, 2, 4, 3, 6, 2],
+            backgroundColor: '#43E396',
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: '#f3f4f6' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    }
+    
+    // BP Chart
+    let bpChartInstance = null;
+    function initBpChart() {
+      if (bpChartInstance) return;
+      
+      const ctx = document.getElementById('bpChart');
+      if (!ctx) return;
+      
+      bpChartInstance = new Chart(ctx.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: ['12/16', '12/17', '12/18', '12/19', '12/20', '12/21', '12/22'],
+          datasets: [{
+            label: '수축기',
+            data: [135, 142, 138, 145, 140, 152, 138],
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            fill: true,
+            tension: 0.4
+          }, {
+            label: '이완기',
+            data: [85, 88, 86, 90, 88, 98, 88],
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            fill: true,
+            tension: 0.4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom' } },
+          scales: {
+            y: { min: 60, max: 180, grid: { color: '#f3f4f6' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    }
+    
+    // Detail Panel
+    let detailMap = null;
+    
+    function openBandDetail(index) {
+      const band = bands[index];
+      
+      // Update panel content
+      document.getElementById('detailTitle').textContent = `${band.user} - ${band.id}`;
+      document.getElementById('detailBandId').textContent = band.id;
+      document.getElementById('detailUserName').textContent = band.user;
+      document.getElementById('detailCoords').textContent = `${band.lat.toFixed(4)}, ${band.lng.toFixed(4)}`;
+      
+      // Vitals
+      const vitalHr = document.getElementById('vitalHr');
+      const vitalBp = document.getElementById('vitalBp');
+      
+      if (band.status === 'online') {
+        document.querySelector('#vitalHr .vital-value').textContent = band.hr;
+        document.getElementById('vitalSpo2').textContent = band.spo2;
+        document.querySelector('#vitalBp .vital-value').textContent = band.bp;
+        
+        vitalHr.className = band.hr > 100 ? 'vital-card warning' : 'vital-card';
+        vitalBp.className = parseInt(band.bp) >= 140 ? 'vital-card warning' : 'vital-card';
+      } else {
+        document.querySelector('#vitalHr .vital-value').textContent = '-';
+        document.getElementById('vitalSpo2').textContent = '-';
+        document.querySelector('#vitalBp .vital-value').textContent = '-';
+        vitalHr.className = 'vital-card';
+        vitalBp.className = 'vital-card';
+      }
+      
+      // Status
+      const statusChip = document.getElementById('detailStatus');
+      statusChip.textContent = band.status === 'online' ? '연결됨' : '오프라인';
+      statusChip.className = band.status === 'online' ? 'chip chip-success' : 'chip chip-grey';
+      
+      // Battery
+      const batteryFill = document.getElementById('detailBattery');
+      const batteryText = document.getElementById('detailBatteryText');
+      let batteryColor = '#10b981';
+      if (band.battery <= 20) batteryColor = '#ef4444';
+      else if (band.battery <= 50) batteryColor = '#f59e0b';
+      batteryFill.style.width = band.battery + '%';
+      batteryFill.style.background = batteryColor;
+      batteryText.textContent = band.battery + '%';
+      
+      // Show panel
+      document.getElementById('detailOverlay').classList.add('show');
+      document.getElementById('detailPanel').classList.add('show');
+      
+      // Initialize detail map
+      setTimeout(() => {
+        if (detailMap) {
+          detailMap.remove();
+        }
+        
+        detailMap = L.map('detailMap').setView([band.lat, band.lng], 16);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap'
+        }).addTo(detailMap);
+        
+        const isOnline = band.status === 'online';
+        const markerIcon = L.divIcon({
+          html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32">
+            <path fill="#257E53" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            <circle cx="12" cy="9" r="3" fill="${isOnline ? '#10b981' : '#9ca3af'}"/>
+          </svg>`,
+          className: '',
+          iconSize: [32, 32],
+          iconAnchor: [16, 32]
+        });
+        
+        L.marker([band.lat, band.lng], { icon: markerIcon }).addTo(detailMap);
+      }, 300);
+    }
+    
+    function closeBandDetail() {
+      document.getElementById('detailOverlay').classList.remove('show');
+      document.getElementById('detailPanel').classList.remove('show');
+    }
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+      initDashboardMap();
+      initWeeklyChart();
+    });
+  </script>
+</body>
+</html>
