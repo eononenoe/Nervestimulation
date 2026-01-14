@@ -9,6 +9,7 @@ import {
   TextInput,
   Modal,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { Picker } from '@react-native-picker/picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
@@ -66,6 +67,15 @@ const BandSearchScreen = ({ navigation }) => {
     },
   ];
 
+  // 모의 밴드 위치 데이터
+  const bandLocations = [
+    { id: '467191213660619', user: '김태현', lat: 36.1200, lng: 128.3460, status: 'online' },
+    { id: '467191213660620', user: '강민준', lat: 36.1180, lng: 128.3430, status: 'online' },
+    { id: '467191213660614', user: '윤서연', lat: 36.1210, lng: 128.3420, status: 'online' },
+    { id: '467191213660616', user: '이수빈', lat: 36.1190, lng: 128.3450, status: 'online' },
+    { id: '467191213660623', user: '박도현', lat: 36.1185, lng: 128.3440, status: 'offline' },
+  ];
+
   const getStatusColor = (status) => {
     if (status === '정상') return colors.primary;
     if (status === '주의') return '#FF9800';
@@ -80,6 +90,67 @@ const BandSearchScreen = ({ navigation }) => {
     const matchStatus = statusFilter === '' || band.status === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  // 선택된 밴드의 위치 찾기
+  const selectedBandLocation = selectedBand ? bandLocations.find(
+    loc => loc.id === selectedBand.id || loc.user === selectedBand.name
+  ) : null;
+
+  // 선택된 밴드의 위치 지도 HTML 생성 (대시보드 방식과 동일)
+  const locationMapHtml = selectedBandLocation ? `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <style>
+        body { margin: 0; padding: 0; }
+        #map { width: 100vw; height: 100vh; }
+      </style>
+    </head>
+    <body>
+      <div id="map"></div>
+      <script>
+        var map = L.map('map').setView([${selectedBandLocation.lat}, ${selectedBandLocation.lng}], 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // 온라인/오프라인 마커
+        var greenIcon = L.divIcon({
+          className: 'custom-icon',
+          html: '<div style="background-color:#43E396;width:30px;height:30px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>',
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+
+        var greyIcon = L.divIcon({
+          className: 'custom-icon',
+          html: '<div style="background-color:#9ca3af;width:30px;height:30px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>',
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+
+        // 밴드 데이터
+        var band = {
+          id: '${selectedBandLocation.id}',
+          user: '${selectedBandLocation.user}',
+          lat: ${selectedBandLocation.lat},
+          lng: ${selectedBandLocation.lng},
+          status: '${selectedBandLocation.status}'
+        };
+
+        var icon = band.status === 'online' ? greenIcon : greyIcon;
+        var marker = L.marker([band.lat, band.lng], {icon: icon}).addTo(map);
+
+        marker.bindPopup('<b>' + band.user + '</b><br>' + (band.status === 'online' ? '온라인' : '오프라인'));
+        marker.openPopup();
+      </script>
+    </body>
+    </html>
+  ` : null;
 
   const renderBandCard = (band) => (
     <View key={band.id} style={[styles.bandCard, shadow.small]}>
@@ -283,22 +354,37 @@ const BandSearchScreen = ({ navigation }) => {
             </View>
 
             <View style={styles.modalContent}>
-              <View style={styles.locationPlaceholder}>
-                <MaterialCommunityIcons name="map-marker" size={64} color={colors.primary} />
-                <Text style={styles.locationText}>지도 영역</Text>
-              </View>
+              {locationMapHtml ? (
+                <>
+                  <View style={styles.locationMapContainer}>
+                    <WebView
+                      style={styles.locationMap}
+                      originWhitelist={['*']}
+                      source={{ html: locationMapHtml }}
+                      javaScriptEnabled={true}
+                      domStorageEnabled={true}
+                      scrollEnabled={false}
+                    />
+                  </View>
 
-              <View style={styles.locationInfo}>
-                <Text style={styles.locationInfoText}>위도: 36.1194</Text>
-                <Text style={styles.locationInfoText}>경도: 128.3446</Text>
-                <Text style={styles.locationInfoText}>마지막 업데이트: 방금 전</Text>
-              </View>
+                  <View style={styles.locationInfo}>
+                    <Text style={styles.locationInfoText}>위도: {selectedBandLocation?.lat}</Text>
+                    <Text style={styles.locationInfoText}>경도: {selectedBandLocation?.lng}</Text>
+                    <Text style={styles.locationInfoText}>마지막 업데이트: 방금 전</Text>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.locationPlaceholder}>
+                  <MaterialCommunityIcons name="map-marker-off" size={64} color={colors.textLight} />
+                  <Text style={styles.locationText}>위치 정보 없음</Text>
+                </View>
+              )}
 
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonPrimary, { width: '100%' }]}
+                style={styles.closeButton}
                 onPress={() => setLocationModalVisible(false)}
               >
-                <Text style={styles.modalButtonTextPrimary}>닫기</Text>
+                <Text style={styles.closeButtonText}>닫기</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -511,9 +597,9 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   modalButtonTextPrimary: {
-    fontSize: scaleFontSize(14),
-    fontWeight: '600',
-    color: colors.primary,
+    fontSize: scaleFontSize(15),
+    fontWeight: '700',
+    color: '#257E53',
   },
   locationPlaceholder: {
     height: scaleSize(250),
@@ -529,6 +615,17 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginTop: spacing.sm,
   },
+  locationMapContainer: {
+    height: scaleSize(250),
+    borderRadius: scaleSize(12),
+    overflow: 'hidden',
+    backgroundColor: colors.borderLight,
+    marginBottom: spacing.md,
+  },
+  locationMap: {
+    width: '100%',
+    height: '100%',
+  },
   locationInfo: {
     backgroundColor: colors.background,
     padding: spacing.md,
@@ -539,6 +636,20 @@ const styles = StyleSheet.create({
     fontSize: scaleFontSize(13),
     color: colors.textSecondary,
     marginBottom: spacing.xs,
+  },
+  closeButton: {
+    width: '100%',
+    paddingVertical: scaleSize(14),
+    borderRadius: scaleSize(8),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    marginTop: spacing.sm,
+  },
+  closeButtonText: {
+    fontSize: scaleFontSize(16),
+    fontWeight: 700,
+    color: '#FFFFFF',
   },
 });
 

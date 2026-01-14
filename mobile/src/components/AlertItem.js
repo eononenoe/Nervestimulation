@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { colors } from '../utils/theme';
 import { scaleFontSize, scaleSize, spacing } from '../utils/responsive';
 
@@ -52,11 +52,17 @@ const styles = StyleSheet.create({
     height: scaleSize(8),
     borderRadius: scaleSize(4),
     marginRight: scaleSize(10),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: scaleSize(8),
-    elevation: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: scaleSize(8),
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   content: {
     flex: 1,

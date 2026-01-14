@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Dimensions,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import VitalCard from './VitalCard';
 import { colors, shadow } from '../utils/theme';
@@ -15,7 +16,7 @@ import { scaleFontSize, scaleSize, spacing } from '../utils/responsive';
 
 const { height } = Dimensions.get('window');
 
-const BandDetailModal = ({ visible, band, onClose, navigation }) => {
+const BandDetailModal = ({ visible, band, onClose, navigation, bandLocations }) => {
   if (!band) return null;
 
   const handleNerveStim = () => {
@@ -27,6 +28,67 @@ const BandDetailModal = ({ visible, band, onClose, navigation }) => {
     onClose();
     navigation.navigate('Report');
   };
+
+  // 해당 밴드의 위치 찾기
+  const bandLocation = bandLocations?.find(
+    loc => loc.user === band.name || loc.id === band.band_id || loc.id === band.id
+  );
+
+  // 위치 정보가 있으면 지도 HTML 생성 (대시보드 방식과 동일)
+  const locationMapHtml = bandLocation ? `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <style>
+        body { margin: 0; padding: 0; }
+        #map { width: 100vw; height: 100vh; }
+      </style>
+    </head>
+    <body>
+      <div id="map"></div>
+      <script>
+        var map = L.map('map').setView([${bandLocation.lat}, ${bandLocation.lng}], 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // 온라인/오프라인 마커
+        var greenIcon = L.divIcon({
+          className: 'custom-icon',
+          html: '<div style="background-color:#43E396;width:30px;height:30px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>',
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+
+        var greyIcon = L.divIcon({
+          className: 'custom-icon',
+          html: '<div style="background-color:#9ca3af;width:30px;height:30px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>',
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+
+        // 밴드 데이터
+        var band = {
+          id: '${bandLocation.id}',
+          user: '${bandLocation.user}',
+          lat: ${bandLocation.lat},
+          lng: ${bandLocation.lng},
+          status: '${bandLocation.status}'
+        };
+
+        var icon = band.status === 'online' ? greenIcon : greyIcon;
+        var marker = L.marker([band.lat, band.lng], {icon: icon}).addTo(map);
+
+        marker.bindPopup('<b>' + band.user + '</b><br>' + (band.status === 'online' ? '온라인' : '오프라인'));
+        marker.openPopup();
+      </script>
+    </body>
+    </html>
+  ` : null;
 
   return (
     <Modal
@@ -121,6 +183,23 @@ const BandDetailModal = ({ visible, band, onClose, navigation }) => {
                 </View>
               </View>
             </View>
+
+            {/* 위치 정보 */}
+            {locationMapHtml && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>위치 정보</Text>
+                <View style={styles.locationMapContainer}>
+                  <WebView
+                    style={styles.locationMap}
+                    originWhitelist={['*']}
+                    source={{ html: locationMapHtml }}
+                    javaScriptEnabled={true}
+                    domStorageEnabled={true}
+                    scrollEnabled={false}
+                  />
+                </View>
+              </View>
+            )}
 
             {/* 액션 버튼 */}
             <View style={styles.actionButtons}>
@@ -265,6 +344,16 @@ const styles = StyleSheet.create({
     fontSize: scaleFontSize(13),
     fontWeight: '600',
     color: colors.primary,
+  },
+  locationMapContainer: {
+    height: scaleSize(200),
+    borderRadius: scaleSize(12),
+    overflow: 'hidden',
+    backgroundColor: colors.borderLight,
+  },
+  locationMap: {
+    width: '100%',
+    height: '100%',
   },
 });
 

@@ -8,7 +8,9 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
 import StatCard from '../components/StatCard';
@@ -37,6 +39,81 @@ const DashboardScreen = ({ navigation }) => {
     { id: 'WS-2024-0002', user: '박철수', lat: 36.1180, lng: 128.3430, status: 'online' },
     { id: 'WS-2024-0003', user: '이민수', lat: 36.1210, lng: 128.3420, status: 'offline' },
   ];
+
+  // Leaflet 지도 HTML
+  const mapHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <style>
+        body { margin: 0; padding: 0; }
+        #map { width: 100vw; height: 100vh; }
+      </style>
+    </head>
+    <body>
+      <div id="map"></div>
+      <script>
+        var map = L.map('map').setView([36.1194, 128.3446], 14);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // 관리자 마커 (파란색)
+        var blueIcon = L.divIcon({
+          className: 'custom-icon',
+          html: '<div style="background-color:#0078d4;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+
+        L.marker([36.1194, 128.3446], {icon: blueIcon})
+          .addTo(map)
+          .bindPopup('<b>관리자</b><br>구미시 산호대로 253');
+
+        // 밴드 마커들
+        var greenIcon = L.divIcon({
+          className: 'custom-icon',
+          html: '<div style="background-color:#43E396;width:20px;height:20px;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>',
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        });
+
+        var greyIcon = L.divIcon({
+          className: 'custom-icon',
+          html: '<div style="background-color:#9ca3af;width:20px;height:20px;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>',
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        });
+
+        // 밴드 데이터
+        var bands = [
+          {id: 'WS-2024-0001', user: '김영희', lat: 36.1200, lng: 128.3460, status: 'online'},
+          {id: 'WS-2024-0002', user: '박철수', lat: 36.1180, lng: 128.3430, status: 'online'},
+          {id: 'WS-2024-0003', user: '이민수', lat: 36.1210, lng: 128.3420, status: 'offline'}
+        ];
+
+        // 마커 생성 및 클릭 이벤트
+        bands.forEach(function(band) {
+          var icon = band.status === 'online' ? greenIcon : greyIcon;
+          var marker = L.marker([band.lat, band.lng], {icon: icon}).addTo(map);
+
+          marker.bindPopup('<b>' + band.user + '</b><br>' + (band.status === 'online' ? '온라인' : '오프라인'));
+
+          // 마커 클릭 시 React Native로 메시지 전송
+          marker.on('click', function() {
+            if (window.ReactNativeWebView) {
+              window.ReactNativeWebView.postMessage(JSON.stringify(band));
+            }
+          });
+        });
+      </script>
+    </body>
+    </html>
+  `;
 
   // 초기 데이터 로드
   useEffect(() => {
@@ -91,6 +168,16 @@ const DashboardScreen = ({ navigation }) => {
 
     setSelectedBand(bandToShow);
     setModalVisible(true);
+  };
+
+  // 지도 마커 클릭 시 처리
+  const handleMapMessage = (event) => {
+    try {
+      const bandData = JSON.parse(event.nativeEvent.data);
+      handleLocationBandPress(bandData);
+    } catch (error) {
+      console.error('Map message parse error:', error);
+    }
   };
 
 
@@ -156,52 +243,31 @@ const DashboardScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Map Placeholder */}
-        <View style={[styles.card, shadow.small, styles.mapCard]}>
-          <View style={styles.mapPlaceholder}>
-            <MaterialCommunityIcons name="map-marker" size={48} color={colors.primary} />
-            <Text style={styles.mapPlaceholderText}>지도 영역</Text>
-            <Text style={styles.mapPlaceholderSubtext}>경북 구미시 산호대로 253</Text>
-
-            <View style={styles.locationInfo}>
-              <View style={styles.locationItem}>
-                <MaterialCommunityIcons name="account" size={20} color={colors.primary} />
-                <Text style={styles.locationText}>관리자 위치</Text>
-              </View>
-              {bandLocations.map((band) => (
-                <TouchableOpacity
-                  key={band.id}
-                  style={styles.locationItem}
-                  onPress={() => handleLocationBandPress(band)}
-                >
-                  <MaterialCommunityIcons
-                    name="watch"
-                    size={20}
-                    color={band.status === 'online' ? colors.accent : colors.grey}
-                  />
-                  <Text style={styles.locationText}>{band.user}</Text>
-                  <View style={[
-                    styles.statusDot,
-                    { backgroundColor: band.status === 'online' ? colors.accent : colors.grey }
-                  ]} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+        {/* Map */}
+        <View style={styles.mapCard}>
+          <WebView
+            style={styles.map}
+            originWhitelist={['*']}
+            source={{ html: mapHtml }}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            scrollEnabled={false}
+            onMessage={handleMapMessage}
+          />
 
           {/* 지도 범례 */}
           <View style={styles.mapLegend}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-              <Text style={styles.legendText}>관리자 위치</Text>
+              <View style={[styles.legendDot, { backgroundColor: '#0078d4' }]} />
+              <Text style={styles.legendText}>관리자</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: colors.accent }]} />
-              <Text style={styles.legendText}>밴드 (온라인)</Text>
+              <Text style={styles.legendText}>온라인</Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.grey }]} />
-              <Text style={styles.legendText}>밴드 (오프라인)</Text>
+              <View style={[styles.legendDot, { backgroundColor: colors.greyLight }]} />
+              <Text style={styles.legendText}>오프라인</Text>
             </View>
           </View>
         </View>
@@ -304,6 +370,7 @@ const DashboardScreen = ({ navigation }) => {
         band={selectedBand}
         onClose={() => setModalVisible(false)}
         navigation={navigation}
+        bandLocations={bandLocations}
       />
     </SafeAreaView>
   );
@@ -375,47 +442,13 @@ const styles = StyleSheet.create({
   mapCard: {
     height: scaleSize(300),
     marginBottom: spacing.lg,
-  },
-  mapPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f0f9ff',
-    padding: spacing.lg,
-  },
-  mapPlaceholderText: {
-    fontSize: scaleFontSize(16),
-    fontWeight: '600',
-    color: colors.primary,
-    marginTop: spacing.sm,
-  },
-  mapPlaceholderSubtext: {
-    fontSize: scaleFontSize(12),
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  locationInfo: {
-    width: '100%',
-    marginTop: spacing.lg,
-    gap: spacing.sm,
-  },
-  locationItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: 'white',
-    padding: spacing.sm,
-    borderRadius: scaleSize(8),
-    gap: spacing.sm,
+    borderRadius: scaleSize(14),
+    overflow: 'hidden',
   },
-  locationText: {
-    fontSize: scaleFontSize(13),
-    color: colors.text,
-    flex: 1,
-  },
-  statusDot: {
-    width: scaleSize(8),
-    height: scaleSize(8),
-    borderRadius: scaleSize(4),
+  map: {
+    width: '100%',
+    height: '100%',
   },
   mapLegend: {
     position: 'absolute',
@@ -424,7 +457,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     padding: spacing.sm,
     borderRadius: scaleSize(8),
-    ...shadow.small,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   legendItem: {
     flexDirection: 'row',

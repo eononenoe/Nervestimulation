@@ -62,7 +62,7 @@ export const theme = {
         android: 'sans-serif',
         default: 'System',
       }),
-      fontWeight: '400',
+      fontWeight: 400,
     },
     medium: {
       fontFamily: Platform.select({
@@ -70,7 +70,7 @@ export const theme = {
         android: 'sans-serif-medium',
         default: 'System',
       }),
-      fontWeight: '500',
+      fontWeight: 500,
     },
     light: {
       fontFamily: Platform.select({
@@ -78,7 +78,7 @@ export const theme = {
         android: 'sans-serif-light',
         default: 'System',
       }),
-      fontWeight: '300',
+      fontWeight: 300,
     },
     thin: {
       fontFamily: Platform.select({
@@ -86,7 +86,7 @@ export const theme = {
         android: 'sans-serif-thin',
         default: 'System',
       }),
-      fontWeight: '100',
+      fontWeight: 100,
     },
   },
 };
