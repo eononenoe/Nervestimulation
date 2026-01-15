@@ -44,7 +44,8 @@ export const DashboardProvider = ({ children }) => {
       setError(null);
 
       const response = await dashboardAPI.getDashboard();
-      const data = response.data;
+      // 백엔드 응답: { success: true, data: {...} }
+      const data = response.data.data || response.data;
 
       setAlerts(data.alerts || mockData.alerts);
       setEvents(data.events || []);
@@ -62,7 +63,10 @@ export const DashboardProvider = ({ children }) => {
   const loadBands = useCallback(async () => {
     try {
       const response = await dashboardAPI.getBands();
-      setBands(response.data || mockData.bands);
+      // 백엔드 응답: { success: true, data: [...] }
+      const bandsData = response.data.data || response.data;
+      console.log('Loaded bands:', bandsData);
+      setBands(Array.isArray(bandsData) ? bandsData : mockData.bands);
     } catch (error) {
       console.error('Failed to load bands:', error);
       // API 실패 시 이미 설정된 Mock 데이터 유지
@@ -71,7 +75,12 @@ export const DashboardProvider = ({ children }) => {
 
   // 알림 추가 (Socket에서 호출)
   const addAlert = useCallback((alert) => {
-    setAlerts((prev) => [alert, ...prev].slice(0, 10)); // 최대 10개 유지
+    console.log('DashboardContext.addAlert called with:', JSON.stringify(alert));
+    setAlerts((prev) => {
+      const newAlerts = [alert, ...prev].slice(0, 10);
+      console.log('New alerts array:', JSON.stringify(newAlerts));
+      return newAlerts;
+    });
   }, []);
 
   // 이벤트 추가 (Socket에서 호출)

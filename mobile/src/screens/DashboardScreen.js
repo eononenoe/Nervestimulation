@@ -18,16 +18,25 @@ import QuickActionButton from '../components/QuickActionButton';
 import AlertItem from '../components/AlertItem';
 import BandListItem from '../components/BandListItem';
 import BandDetailModal from '../components/BandDetailModal';
+import RealtimeNotification from '../components/RealtimeNotification';
 import { useDashboard } from '../contexts/DashboardContext';
+import { useSocket } from '../contexts/SocketContext';
 import { colors, shadow } from '../utils/theme';
 import { scaleFontSize, scaleSize, spacing } from '../utils/responsive';
 
 const DashboardScreen = ({ navigation }) => {
   const dashboard = useDashboard();
+  const socket = useSocket();
   const [refreshing, setRefreshing] = useState(false);
   const [selectedBand, setSelectedBand] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [notification, setNotification] = useState({
+    visible: false,
+    type: 'info',
+    message: '',
+    userName: '',
+  });
 
   // 구미 산호대로 253 좌표
   const GUMI_LAT = 36.1194;
@@ -126,6 +135,36 @@ const DashboardScreen = ({ navigation }) => {
     return () => clearTimeout(timeout);
   }, []);
 
+  // 새 알림이 추가될 때 실시간 알림 표시
+  useEffect(() => {
+    console.log('=== DASHBOARD ALERTS CHANGED ===');
+    console.log('Alerts:', JSON.stringify(dashboard.alerts));
+
+    if (dashboard.alerts && dashboard.alerts.length > 0) {
+      const latestAlert = dashboard.alerts[0];
+      console.log('Latest alert:', JSON.stringify(latestAlert));
+
+      // 마지막 알림이 최근 것인지 확인 (5초 이내)
+      const now = Date.now();
+      const timeDiff = now - latestAlert.id;
+      console.log(`Time check: now=${now}, alert.id=${latestAlert.id}, diff=${timeDiff}`);
+
+      if (latestAlert.id && timeDiff < 5000) {
+        console.log('SHOWING NOTIFICATION!');
+        setNotification({
+          visible: true,
+          type: latestAlert.level === 'danger' ? 'alert' : latestAlert.level === 'warning' ? 'warning' : 'event',
+          message: latestAlert.message,
+          userName: latestAlert.userName,
+        });
+      } else {
+        console.log('Alert too old or no ID, not showing notification');
+      }
+    } else {
+      console.log('No alerts to display');
+    }
+  }, [dashboard.alerts]);
+
   const loadData = async () => {
     try {
       await Promise.all([
@@ -198,6 +237,25 @@ const DashboardScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <AppHeader />
+
+      {/* Real-time Notification */}
+      <RealtimeNotification
+        visible={notification.visible}
+        type={notification.type}
+        message={notification.message}
+        userName={notification.userName}
+        onPress={() => {
+          setNotification({ ...notification, visible: false });
+          // 알림 클릭 시 해당 밴드의 상세 정보 표시
+          if (dashboard.alerts && dashboard.alerts.length > 0) {
+            const latestAlert = dashboard.alerts[0];
+            if (latestAlert.band) {
+              handleBandPress(latestAlert.band);
+            }
+          }
+        }}
+        onClose={() => setNotification({ ...notification, visible: false })}
+      />
 
       {/* Content */}
       <ScrollView

@@ -46,29 +46,16 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      // Mock 로그인 (데이터베이스 없이 테스트용)
-      if ((username === 'demo' || username === 'admin') && password === 'demo') {
-        const mockToken = 'mock-token-' + Date.now();
-        const mockUser = {
-          id: 1,
-          username: username,
-          name: '관리자',
-          email: 'admin@wellsafer.com',
-        };
+      console.log('=== LOGIN ATTEMPT ===');
+      console.log('Username:', username);
 
-        // 토큰과 사용자 정보 저장
-        await AsyncStorage.setItem('token', mockToken);
-        await AsyncStorage.setItem('user', JSON.stringify(mockUser));
-
-        setToken(mockToken);
-        setUser(mockUser);
-
-        return { success: true };
-      }
-
-      // 실제 API 호출 시도
+      // 실제 API 호출
       const response = await authAPI.login(username, password);
-      const { token: newToken, user: newUser } = response.data;
+      console.log('SUCCESS Login response:', response.data);
+
+      // 백엔드 응답 구조: { success: true, data: { token, user } }
+      const responseData = response.data.data || response.data;
+      const { token: newToken, user: newUser } = responseData;
 
       // 토큰과 사용자 정보 저장
       await AsyncStorage.setItem('token', newToken);
@@ -77,10 +64,30 @@ export const AuthProvider = ({ children }) => {
       setToken(newToken);
       setUser(newUser);
 
+      console.log('SUCCESS Login successful, user:', newUser);
       return { success: true };
     } catch (error) {
-      const errorMessage =
-        error.response?.data?.error || '아이디 또는 비밀번호가 올바르지 않습니다.';
+      console.error('ERROR Login error:', error);
+      console.error('Error message:', error.message);
+      console.error('Error code:', error.code);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+
+      let errorMessage;
+      if (error.response) {
+        // 서버가 응답했지만 에러 (401, 400 등)
+        errorMessage = error.response?.data?.error ||
+          error.response?.data?.message ||
+          '아이디 또는 비밀번호가 올바르지 않습니다.';
+      } else if (error.request) {
+        // 요청은 보냈지만 응답이 없음 (네트워크 에러)
+        errorMessage = '서버에 연결할 수 없습니다. 네트워크를 확인해주세요.';
+        console.error('ERROR Network error - no response received');
+      } else {
+        // 요청 설정 중 에러
+        errorMessage = '로그인 요청 중 오류가 발생했습니다.';
+      }
+
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {

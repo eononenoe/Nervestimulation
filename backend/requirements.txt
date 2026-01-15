@@ -1,0 +1,24 @@
+# Wellsafer Backend Requirements
+# Flask Core
+Flask==2.3.3
+Flask-CORS==4.0.0
+Flask-SocketIO==5.3.6
+Flask-SQLAlchemy==3.1.1
+Flask-MQTT==1.1.1
+Flask-Restless-NG==1.0.0
+
+# Database
+PyMySQL==1.1.0
+SQLAlchemy==2.0.23
+
+# Authentication
+PyJWT==2.8.0
+bcrypt==4.1.1
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0
+eventlet==0.33.3
+
+# SMS (SOAP)
+zeep==4.2.1

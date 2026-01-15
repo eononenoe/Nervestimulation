@@ -1,65 +1,165 @@
-import http.client
-from backend.sms.utils import *
+# -*- coding: utf-8 -*-
+"""
+SOAP API 요청 처리 모듈
+SMS 게이트웨이와 SOAP 프로토콜 통신
+"""
 
-#전송 요청 실행
-def send_soap_request(sms_id, password, snd_number, rcv_number, sms_content, option,reserve_date,reserve_time,userdefine,canclemode):
+import requests
+from xml.etree import ElementTree as ET
+
+
+# SMS 게이트웨이 URL (예시)
+SMS_GATEWAY_URL = "https://sms.example.com/soap/v1"
+
+
+def send_soap_request(receiver, sender, message, api_key):
+    """
+    SOAP API로 SMS 발송 요청
+    
+    Args:
+        receiver: 수신자 전화번호
+        sender: 발신자 전화번호
+        message: 메시지 내용
+        api_key: API 인증키
+    
+    Returns:
+        dict: {'success': bool, 'message_id': str, 'error': str}
+    """
+    # SOAP 요청 XML 생성
+    soap_envelope = f'''<?xml version="1.0" encoding="UTF-8"?>
+    <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+                   xmlns:sms="http://sms.example.com/api">
+        <soap:Header>
+            <sms:AuthHeader>
+                <sms:ApiKey>{api_key}</sms:ApiKey>
+            </sms:AuthHeader>
+        </soap:Header>
+        <soap:Body>
+            <sms:SendSMS>
+                <sms:Receiver>{receiver}</sms:Receiver>
+                <sms:Sender>{sender}</sms:Sender>
+                <sms:Message>{escape_xml(message)}</sms:Message>
+                <sms:MessageType>SMS</sms:MessageType>
+            </sms:SendSMS>
+        </soap:Body>
+    </soap:Envelope>'''
+    
+    headers = {
+        'Content-Type': 'text/xml; charset=utf-8',
+        'SOAPAction': 'http://sms.example.com/api/SendSMS'
+    }
+    
     try:
-        conn = http.client.HTTPConnection("webservice.youiwe.co.kr")
-        if option == 1:
-            soap_request = create_soap_request_getRemainCount(sms_id, password)
-        elif option == 2:
-            soap_request = create_soap_request_getRemainDay(sms_id, password)
-        elif option == 3:
-            soap_request = create_soap_request_getWeeklyLimit(sms_id, password)
-        elif option == 4:
-            soap_request = create_soap_request_sendSMS(sms_id, password, snd_number, rcv_number, sms_content)
-        elif option == 5:
-            soap_request = create_soap_request_sendSMSReserve(sms_id, password, snd_number, rcv_number, sms_content,reserve_date,reserve_time,userdefine)
-            print(sms_id, password, snd_number, rcv_number, sms_content,reserve_date,reserve_time,userdefine)
-        elif option == 6:
-            soap_request = create_soap_request_ReserveCancle(sms_id, password,userdefine,canclemode)
-        else:
-            print("잘못된 옵션입니다.")
-            return
-
-        content_length = len(soap_request)
-        headers = {
-            'Content-Type': 'application/soap+xml; charset=utf-8',
-            'Content-Length': str(content_length)
-        }
-
-        conn.request("POST", "/SMS.v.6/ServiceSMS.asmx", soap_request, headers)
-        response = conn.getresponse()
-
-        # 응답 XML 파싱
-        response_data = response.read()
+        response = requests.post(
+            SMS_GATEWAY_URL,
+            data=soap_envelope.encode('utf-8'),
+            headers=headers,
+            timeout=30
+        )
         
-        try:
-            response_xml = ET.fromstring(response_data)
-            for elem in response_xml.iter():
-                if elem.tag.endswith('Result'):
-                    if elem.text.startswith('-'):
-                        print("에러 코드:", elem.text)
-                    else:
-                        if option ==1 :
-                            print("잔여량:", elem.text)
-                        elif option ==2 :
-                            print("잔여기간/잔여량:", elem.text)    
-                        elif option ==3 :
-                            print("주간 제한량 | URL 제한량 | 1주간 발송량 | URL 발송량:", elem.text)   
-                        elif option ==4 :
-                            print("전송된 문자:", elem.text)   
-                        elif option ==5 :
-                            print("예약 성공문자:", elem.text)   
-                        elif option ==6 :
-                            print("취소 성공문자:", elem.text)       
-                    
-        except ET.ParseError as e:
-            print("XML 파싱 오류:", e)
+        if response.status_code == 200:
+            return parse_soap_response(response.text)
+        else:
+            return {
+                'success': False,
+                'error': f'HTTP {response.status_code}: {response.text}'
+            }
+            
+    except requests.Timeout:
+        return {'success': False, 'error': 'Request timeout'}
+    except requests.RequestException as e:
+        return {'success': False, 'error': str(e)}
 
-    except http.client.HTTPException as e:
-        print("HTTP 요청 오류:", e)
+
+def parse_soap_response(xml_text):
+    """
+    SOAP 응답 XML 파싱
+    
+    Args:
+        xml_text: 응답 XML 문자열
+    
+    Returns:
+        dict: 파싱된 결과
+    """
+    try:
+        root = ET.fromstring(xml_text)
+        
+        # 네임스페이스 처리
+        namespaces = {
+            'soap': 'http://schemas.xmlsoap.org/soap/envelope/',
+            'sms': 'http://sms.example.com/api'
+        }
+        
+        # 결과 코드 확인
+        result_code = root.find('.//sms:ResultCode', namespaces)
+        message_id = root.find('.//sms:MessageId', namespaces)
+        
+        if result_code is not None and result_code.text == '0':
+            return {
+                'success': True,
+                'message_id': message_id.text if message_id is not None else None
+            }
+        else:
+            error_msg = root.find('.//sms:ErrorMessage', namespaces)
+            return {
+                'success': False,
+                'error': error_msg.text if error_msg is not None else 'Unknown error'
+            }
+            
+    except ET.ParseError as e:
+        return {'success': False, 'error': f'XML parse error: {e}'}
+
+
+def escape_xml(text):
+    """XML 특수문자 이스케이프"""
+    if text is None:
+        return ''
+    
+    escape_map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&apos;'
+    }
+    
+    for char, escape in escape_map.items():
+        text = text.replace(char, escape)
+    
+    return text
+
+
+# ============================================================
+# 대체 구현 (zeep 라이브러리 사용)
+# ============================================================
+
+def send_soap_request_zeep(receiver, sender, message, api_key):
+    """
+    zeep 라이브러리를 사용한 SOAP 요청 (대체 구현)
+    
+    실제 WSDL URL이 있는 경우 사용
+    """
+    try:
+        from zeep import Client
+        from zeep.wsse.username import UsernameToken
+        
+        # WSDL 클라이언트 생성
+        wsdl_url = "https://sms.example.com/soap/v1?wsdl"
+        client = Client(wsdl_url)
+        
+        # API 호출
+        result = client.service.SendSMS(
+            Receiver=receiver,
+            Sender=sender,
+            Message=message,
+            ApiKey=api_key
+        )
+        
+        return {
+            'success': result.ResultCode == 0,
+            'message_id': result.MessageId,
+            'error': result.ErrorMessage if result.ResultCode != 0 else None
+        }
+        
     except Exception as e:
-        print("예기치 않은 오류:", e)
-    finally:
-        conn.close()
+        return {'success': False, 'error': str(e)}

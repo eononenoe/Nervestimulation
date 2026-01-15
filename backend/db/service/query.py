@@ -1,195 +1,303 @@
-print ("module [query] loaded")
-from backend import app
-from backend.db.table.table_band import *
-from sqlalchemy import func, case, or_, Interval
-db = DBManager.db
+# -*- coding: utf-8 -*-
+"""
+데이터베이스 쓰기 작업 모듈 (INSERT/UPDATE)
+"""
 
-def getBandsEventsUser(uid, permission):
-    dev = db.session.query(Events).\
-      distinct(Events.datetime, Events.type).\
-        filter( UsersBands.FK_uid == uid).\
-          filter(UsersBands.FK_bid == Events.FK_bid).\
-          group_by(Events.datetime, Events.type).\
-            all()
-    return dev
+from datetime import datetime
+from backend import db
+from backend.db.table import (
+    User, Band, SensorData, Event, 
+    NerveStimSession, NerveStimHistory, BloodPressure
+)
 
-def getBandsEventsBands(bid):
-    dev = db.session.query(Events).\
-      distinct(Events.datetime, Events.type).\
-        filter(Events.FK_bid==bid).\
-          group_by(Events.datetime, Events.type).\
-            all()
-    return dev
 
-# def selectGatewayPid(pid):
-#     gw = db.session.query(Gateways).filter_by(pid=pid).first()
-#     return gw
-def selectBandBid(bid):
-    band = db.session.query(Bands).filter_by(bid = bid).first()
-    return band
+# ============================================================
+# 센서 데이터 관련
+# ============================================================
 
-# def insertGatewaysBands(pid, bid):
-#     gateways_bands = GatewaysBands()
-#     gateways_bands.FK_pid = pid
-#     gateways_bands.FK_bid = bid
-#     db.session.add(gateways_bands)
-#     db.session.commit()
-#     db.session.remove()
-
-def insertUsers():
-    user = Users()
-    user.uid = 2001
-    user.username = "demo"
-    user.password = DBManager.password_encoder_512("1234")
-    user.name = "demo"
-    user.permission = 1
-    db.session.add(user)
-    db.session.commit()
-    db.session.remove()
-
-def updateBandNameAlias(bid, name, alias):
-    db.session.query(Bands).filter_by(id = bid).update(dict(name=name, alias=alias))
-    db.session.commit()
-    db.session.remove()
-
-# def updateGatewayAlias(pid, alias):
-#     db.session.query(Gateways).filter_by(id = pid).update(dict(alias=alias))
-#     db.session.commit()
-#     db.session.remove()
-
-def insertBandData(extAddress):
-    bands = Bands()
-    bands.bid = extAddress
-    bands.alias = "init"
-    bands.name = "init"
-    bands.gender = 0
-    bands.birth = "1997-09-01"
-        
-    db.session.add(bands)        
-    db.session.commit()
-    db.session.remove()
+def insert_sensordata(bid, data):
+    """
+    센서 데이터 저장
     
-# def insertUsersGateways(uid,pid):
-#     users_gateways = UsersGateways()
-#     users_gateways.FK_pid = pid
-#     users_gateways.FK_uid = uid
-#     db.session.add(users_gateways)
-#     db.session.commit()
-#     db.session.remove()
-
-def insertUsersGroups(uid,gid):
-    users_groups = UsersGroups()
-    users_groups.FK_gid = gid
-    users_groups.FK_uid = uid
-    db.session.add(users_groups)
-    db.session.commit()   
-
-def insertUsersBands(uid, bid):
-    users_bands = UsersBands()
-    users_bands.FK_bid = bid
-    users_bands.FK_uid = uid
-    db.session.add(users_bands)
-    db.session.commit()
-    db.session.remove()
-
-def insertSensorData(data, ):
-    data = SensorData()
-
-# def updateGatewaysIP(id, ip):
-#     db.session.query(Gateways).filter_by(id=id).update(dict(ip=ip))
-#     db.session.commit()
-
-# def insertGateway(gw):
-#     gateways = Gateways()
-#     gateways.pid = gw['panid']
-#     gateways.alias = "init"
-#     gateways.ip = gw['ip']
-#     gateways.location = "서울"
-#     db.session.add(gateways)
-#     db.session.commit()
-#     db.session.remove()
-
-def insertEvent(id, type, value):
-    events = Events()
-    events.FK_bid = id
-    events.type = type
-    events.value = value
-    events.datetime = datetime.datetime.now()
-    db.session.add(events)
+    Args:
+        bid: 밴드 ID (FK_bid)
+        data: 센서 데이터 딕셔너리
+    
+    Returns:
+        int: 삽입된 레코드 ID
+    """
+    sensor = SensorData(
+        FK_bid=bid,
+        datetime=data.get('datetime', datetime.utcnow()),
+        hr=data.get('hr'),
+        spo2=data.get('spo2'),
+        hrv_sdnn=data.get('hrv_sdnn'),
+        hrv_rmssd=data.get('hrv_rmssd'),
+        skin_temp=data.get('skin_temp'),
+        acc_x=data.get('acc_x'),
+        acc_y=data.get('acc_y'),
+        acc_z=data.get('acc_z'),
+        gyro_x=data.get('gyro_x'),
+        gyro_y=data.get('gyro_y'),
+        gyro_z=data.get('gyro_z'),
+        steps=data.get('steps'),
+        activity_type=data.get('activity_type'),
+        calories=data.get('calories')
+    )
+    
+    db.session.add(sensor)
     db.session.commit()
     
-# def selectGatewayLog(gid):
-#     print("[method] selectGatewayLog")
-#     gatewaylog = GatewayLog.query.filter_by(FK_pid=gid).first()
-#     db.session.flush()
-#     return gatewaylog
+    return sensor.id
 
-# def selectGatewayAll():
-#     try:
-#         print("[method] selectGatewayAll")
-#         gateways = db.session.query(Gateways).all()
-#         db.session.flush()
-#         print(gateways)
-#         return gateways
-#     except Exception as e:
-#         print(e)
-#         return []
+
+# ============================================================
+# 이벤트 관련
+# ============================================================
+
+def insert_event(bid, event_type, event_level, value=None, message=None, lat=None, lng=None):
+    """
+    이벤트(알림) 저장
     
-
-# def updateGatewaysAirpressure(gid, airpressure):
-#     db.session.query(Gateways).filter_by(id = gid).update((dict(airpressure=airpressure)))
-#     db.session.commit()
-#     db.session.flush()
-
-# def updateGatewaysConnectCheck(gid):
-#     db.session.query(Gateways).filter_by(id=gid).\
-#         update(dict(connect_check_time=datetime.datetime.now(timezone('Asia/Seoul'))))
-#     db.session.commit()
-#     db.session.remove()
+    Args:
+        bid: 밴드 ID
+        event_type: 이벤트 유형
+        event_level: 심각도 (1-4)
+        value: 관련 수치
+        message: 이벤트 메시지
+        lat: 위도
+        lng: 경도
     
-# def updateGatewaysConnect(gid, type):
-#     print("[method] updateGatewaysConnect")
-#     getTime = datetime.datetime.now(timezone('Asia/Seoul'))
-#     if type:
-#         Gateways.query.filter_by(id=gid).\
-#             update(dict(connect_state=1, connect_time = getTime, connect_check_time=getTime))
-#     else : 
-#          Gateways.query.filter_by(id=gid).\
-#              update(dict(connect_state=0, disconnect_time = getTime))
-#     db.session.commit()
-#     db.session.flush()
-
-# def insertGatewaysLog(gid, type):
-#     print("[method] insertGatewaysLog")
-#     gatewayLog = GatewayLog()
-#     gatewayLog.FK_pid = gid
-#     gatewayLog.type = type
-#     db.session.add(gatewayLog) 
-#     db.session.commit()
-#     db.session.remove() 
-
-# def selectBandsConnectGateway(gid):
-#     print("[method] selectBandsConnectGateway")
-#     dev = db.session.query(Bands).\
-#         filter(Bands.connect_state == 1).\
-#             filter(Bands.id == GatewaysBands.FK_bid).\
-#                 filter(GatewaysBands.FK_pid == gid).all()
-#     return dev
-
-def updateConnectBands(bid , type):
-    print("[method] updateConnectBands")
-    Bands.query.filter_by(id = bid).update(dict(
-          disconnect_time=datetime.datetime.now(timezone('Asia/Seoul'))
-          , connect_state = type))
+    Returns:
+        int: 삽입된 이벤트 ID
+    """
+    event = Event(
+        FK_bid=bid,
+        datetime=datetime.utcnow(),
+        event_type=event_type,
+        event_level=event_level,
+        value=value,
+        message=message,
+        latitude=lat,
+        longitude=lng
+    )
+    
+    db.session.add(event)
     db.session.commit()
-    db.session.remove()
+    
+    return event.id
 
-def insertConnectBandLog(bid, type):
-    print("[method] setBandLog")
-    bandlog = BandLog()
-    bandlog.FK_bid = bid
-    bandlog.type = type
-    db.session.add(bandlog)
+
+def update_event_resolved(event_id, user_id):
+    """이벤트 해결 처리"""
+    event = Event.query.get(event_id)
+    if event:
+        event.is_resolved = True
+        event.resolved_at = datetime.utcnow()
+        event.resolved_by = user_id
+        db.session.commit()
+        return True
+    return False
+
+
+def update_event_sms_sent(event_id):
+    """이벤트 SMS 발송 완료 처리"""
+    event = Event.query.get(event_id)
+    if event:
+        event.sms_sent = True
+        event.sms_sent_at = datetime.utcnow()
+        db.session.commit()
+        return True
+    return False
+
+
+# ============================================================
+# 밴드 관련
+# ============================================================
+
+def update_band_status(bid, **kwargs):
+    """
+    밴드 상태 업데이트
+    
+    Args:
+        bid: 밴드 ID
+        **kwargs: 업데이트할 필드들 (connect_state, battery, etc.)
+    
+    Returns:
+        int: 영향받은 행 수
+    """
+    band = Band.query.filter_by(bid=bid).first()
+    if not band:
+        return 0
+    
+    for key, value in kwargs.items():
+        if hasattr(band, key):
+            setattr(band, key, value)
+    
+    band.updated_at = datetime.utcnow()
     db.session.commit()
-    db.session.remove()
-      
+    
+    return 1
+
+
+def update_band_location(bid, lat, lng, address=None, location_type='GPS'):
+    """밴드 위치 업데이트"""
+    band = Band.query.filter_by(bid=bid).first()
+    if not band:
+        return 0
+    
+    band.latitude = lat
+    band.longitude = lng
+    band.address = address
+    band.location_type = location_type
+    band.updated_at = datetime.utcnow()
+    
+    db.session.commit()
+    return 1
+
+
+def update_band_last_data(bid):
+    """밴드 마지막 데이터 수신 시간 업데이트"""
+    band = Band.query.filter_by(bid=bid).first()
+    if band:
+        band.last_data_at = datetime.utcnow()
+        band.connect_state = 1  # 온라인으로 설정
+        db.session.commit()
+        return 1
+    return 0
+
+
+def update_band_stimulator_connection(bid, connected, stimulator_id=None):
+    """밴드의 신경자극기 연결 상태 업데이트"""
+    band = Band.query.filter_by(bid=bid).first()
+    if band:
+        band.stimulator_connected = connected
+        band.stimulator_id = stimulator_id if connected else None
+        band.updated_at = datetime.utcnow()
+        db.session.commit()
+        return 1
+    return 0
+
+
+# ============================================================
+# 신경자극 세션 관련
+# ============================================================
+
+def insert_nervestim_session(bid, session_data):
+    """
+    신경자극 세션 생성
+    
+    Args:
+        bid: 밴드 ID
+        session_data: 세션 데이터 딕셔너리
+    
+    Returns:
+        str: 생성된 세션 ID
+    """
+    # 세션 ID 생성
+    session_id = f"SESSION-{datetime.now().strftime('%Y%m%d%H%M%S')}-{bid}"
+    
+    session = NerveStimSession(
+        session_id=session_id,
+        FK_bid=bid,
+        stimulator_id=session_data.get('stimulator_id'),
+        status=0,  # 대기 상태
+        stim_level=session_data.get('stim_level', 1),
+        frequency=session_data.get('frequency', 10.0),
+        pulse_width=session_data.get('pulse_width', 200),
+        duration=session_data.get('duration', 20),
+        stim_mode=session_data.get('stim_mode', 'manual'),
+        target_nerve=session_data.get('target_nerve', 'median'),
+        scheduled_at=session_data.get('scheduled_at')
+    )
+    
+    db.session.add(session)
+    db.session.commit()
+    
+    return session_id
+
+
+def update_nervestim_status(session_id, status, **kwargs):
+    """
+    신경자극 세션 상태 업데이트
+    
+    Args:
+        session_id: 세션 ID
+        status: 새로운 상태 (0-3)
+        **kwargs: 추가 필드 (started_at, ended_at, end_reason)
+    
+    Returns:
+        int: 영향받은 행 수
+    """
+    session = NerveStimSession.query.filter_by(session_id=session_id).first()
+    if not session:
+        return 0
+    
+    session.status = status
+    
+    for key, value in kwargs.items():
+        if hasattr(session, key):
+            setattr(session, key, value)
+    
+    db.session.commit()
+    return 1
+
+
+def update_nervestim_level(session_id, level):
+    """자극 강도 변경"""
+    session = NerveStimSession.query.filter_by(session_id=session_id).first()
+    if session and session.status == 1:  # 진행중일 때만
+        session.stim_level = level
+        db.session.commit()
+        return 1
+    return 0
+
+
+# ============================================================
+# 혈압 관련
+# ============================================================
+
+def insert_bloodpressure(bid, systolic, diastolic, pulse=None, measurement_type='manual', session_id=None):
+    """
+    혈압 기록 저장
+    
+    Args:
+        bid: 밴드 ID
+        systolic: 수축기 혈압
+        diastolic: 이완기 혈압
+        pulse: 맥박수
+        measurement_type: 측정 유형
+        session_id: 연관된 자극 세션 ID
+    
+    Returns:
+        int: 삽입된 레코드 ID
+    """
+    bp = BloodPressure(
+        FK_bid=bid,
+        datetime=datetime.utcnow(),
+        systolic=systolic,
+        diastolic=diastolic,
+        pulse=pulse,
+        measurement_type=measurement_type,
+        session_id=session_id
+    )
+    
+    db.session.add(bp)
+    db.session.commit()
+    
+    return bp.id
+
+
+# ============================================================
+# 사용자 관련
+# ============================================================
+
+def insert_login_history(user_id, ip_addr, user_agent=None):
+    """로그인 이력 저장 (별도 테이블 필요시 구현)"""
+    # 간단히 사용자 마지막 로그인 시간 업데이트
+    user = User.query.get(user_id)
+    if user:
+        user.updated_at = datetime.utcnow()
+        db.session.commit()
+        return user.id
+    return None

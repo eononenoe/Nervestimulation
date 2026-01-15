@@ -4,8 +4,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, gradients } from '../utils/theme';
 import { scaleFontSize, scaleSize, spacing } from '../utils/responsive';
+import { useSocket } from '../contexts/SocketContext';
 
 const AppHeader = () => {
+  const { isConnected } = useSocket();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [currentDate, setCurrentDate] = useState('');
 
@@ -38,6 +40,19 @@ const AppHeader = () => {
       <View style={styles.logoContainer}>
         <MaterialCommunityIcons name="heart-pulse" size={scaleSize(20)} color={colors.accent} />
         <Text style={styles.logoText}>Wellsafer</Text>
+
+        {/* Socket 연결 상태 인디케이터 */}
+        <View style={styles.statusIndicator}>
+          <View
+            style={[
+              styles.statusDot,
+              { backgroundColor: isConnected ? colors.accent : colors.greyLight },
+            ]}
+          />
+          <Text style={styles.statusText}>
+            {isConnected ? '실시간' : '오프라인'}
+          </Text>
+        </View>
       </View>
 
       {/* 시간 & 날씨 위젯 */}
@@ -70,6 +85,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.md,
+    justifyContent: 'space-between',
   },
   logoText: {
     fontSize: scaleFontSize(20),
@@ -123,6 +139,25 @@ const styles = StyleSheet.create({
     fontSize: scaleFontSize(9),
     color: 'white',
     opacity: 0.85,
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: scaleSize(4),
+    borderRadius: scaleSize(12),
+  },
+  statusDot: {
+    width: scaleSize(8),
+    height: scaleSize(8),
+    borderRadius: scaleSize(4),
+    marginRight: scaleSize(6),
+  },
+  statusText: {
+    fontSize: scaleFontSize(10),
+    color: 'white',
+    fontWeight: '500',
   },
 });
 

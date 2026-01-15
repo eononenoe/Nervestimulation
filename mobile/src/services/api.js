@@ -2,7 +2,8 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // 환경변수 또는 기본값 사용
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:5000/api';
+// adb reverse tcp:5000 tcp:5000 실행 후 localhost 사용 가능
+const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:5000/api/Wellsafer/v1';
 
 // Axios 인스턴스 생성
 const api = axios.create({
@@ -47,85 +48,85 @@ api.interceptors.response.use(
 // ========== 인증 API ==========
 export const authAPI = {
   login: (username, password) =>
-    api.post('/auth/login/', { username, password }),
+    api.post('/auth/login', { username, password }),
   logout: () =>
-    api.post('/auth/logout/'),
+    api.post('/auth/logout'),
 };
 
 // ========== 대시보드 API ==========
 export const dashboardAPI = {
   getDashboard: () =>
-    api.get('/dashboard/'),
+    api.get('/dashboard'),
   getBands: () =>
-    api.get('/bands/'),
+    api.get('/bands/list'),
   getBandDetail: (id) =>
-    api.get(`/bands/${id}/`),
+    api.get(`/bands/${id}/detail`),
   getBandLocations: () =>
-    api.get('/bands/locations/'),
+    api.get('/bands/locations'),
 };
 
 // ========== 밴드 API ==========
 export const bandAPI = {
   getList: () =>
-    api.get('/bands/'),
+    api.get('/bands/list'),
   getDetail: (id) =>
-    api.get(`/bands/${id}/`),
+    api.get(`/bands/${id}/detail`),
   getSensorData: (id, params) =>
-    api.get(`/bands/${id}/sensors/`, { params }),
+    api.get(`/bands/${id}/sensor-data`, { params }),
 };
 
 // ========== 신경자극 API ==========
 export const nerveStimAPI = {
   getSessions: (params) =>
-    api.get('/nervestim/sessions/', { params }),
+    api.get('/nervestim/sessions', { params }),
   getSessionDetail: (id) =>
-    api.get(`/nervestim/sessions/${id}/`),
+    api.get(`/nervestim/sessions/${id}`),
   startSession: (data) =>
-    api.post('/nervestim/sessions/', data),
+    api.post('/nervestim/sessions', data),
   stopSession: (id, data) =>
-    api.patch(`/nervestim/sessions/${id}/stop/`, data),
+    api.patch(`/nervestim/sessions/${id}/stop`, data),
 };
 
 // ========== 혈압 API ==========
 export const bloodPressureAPI = {
   getRecords: (params) =>
-    api.get('/bloodpressure/records/', { params }),
+    api.get('/bloodpressure/records', { params }),
   addRecord: (data) =>
-    api.post('/bloodpressure/records/', data),
+    api.post('/bloodpressure/records', data),
   deleteRecord: (id) =>
-    api.delete(`/bloodpressure/records/${id}/`),
+    api.delete(`/bloodpressure/records/${id}`),
 };
 
 // ========== 리포트 API ==========
 export const reportAPI = {
   getList: () =>
-    api.get('/reports/'),
+    api.get('/reports'),
   getDetail: (id) =>
-    api.get(`/reports/${id}/`),
+    api.get(`/reports/${id}`),
   generate: (data) =>
-    api.post('/reports/generate/', data),
+    api.post('/reports/generate', data),
   download: (id) =>
-    api.get(`/reports/${id}/download/`, { responseType: 'blob' }),
+    api.get(`/reports/${id}/download`, { responseType: 'blob' }),
 };
 
 // ========== 기기 API ==========
 export const deviceAPI = {
   getBands: () =>
-    api.get('/devices/bands/'),
+    api.get('/devices/bands'),
   getStimulators: () =>
-    api.get('/devices/stimulators/'),
+    api.get('/devices/stimulators'),
   getDeviceDetail: (id) =>
-    api.get(`/devices/${id}/`),
+    api.get(`/devices/${id}`),
 };
 
 // ========== 사용자 API ==========
 export const userAPI = {
   getList: () =>
-    api.get('/users/'),
+    api.get('/users'),
   getDetail: (id) =>
-    api.get(`/users/${id}/`),
+    api.get(`/users/${id}`),
   update: (id, data) =>
-    api.patch(`/users/${id}/`, data),
+    api.patch(`/users/${id}`, data),
 };
 
 // ========== API 상태 확인 ==========

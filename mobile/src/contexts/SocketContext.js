@@ -16,7 +16,8 @@ export const useSocket = () => {
 
 export const SocketProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
-  const [serverUrl, setServerUrl] = useState('http://localhost:5000');
+  // adb reverse tcp:5000 tcp:5000 실행 후 localhost 사용 가능
+  const [serverUrl, setServerUrl] = useState(process.env.SOCKET_URL || 'http://localhost:5000');
 
   const { token, isAuthenticated } = useAuth();
   const dashboard = useDashboard();
@@ -44,16 +45,26 @@ export const SocketProvider = ({ children }) => {
     }
   }, [isAuthenticated, token, serverUrl]);
 
-  // 센서 데이터 업데이트 이벤트
+  // sensor_update - 센서 데이터 업데이트
   useEffect(() => {
     const handleSensorUpdate = (data) => {
-      console.log('📊 Sensor update received:', data);
-      band.updateSensorData(data);
-      dashboard.updateBandStatus(data.band_id, {
+      console.log('sensor_update received:', data);
+
+      const sensorData = {
+        band_id: data.bid,
         hr: data.hr,
         spo2: data.spo2,
-        bp: data.bp,
-      });
+        hrv_sdnn: data.hrv_sdnn,
+        hrv_rmssd: data.hrv_rmssd,
+        skin_temp: data.skin_temp,
+        steps: data.steps,
+        activity_type: data.activity_type,
+        calories: data.calories,
+        datetime: data.datetime,
+      };
+
+      band.updateSensorData(sensorData);
+      dashboard.updateBandStatus(data.bid, sensorData);
     };
 
     socketService.on('sensor_update', handleSensorUpdate);
@@ -63,27 +74,52 @@ export const SocketProvider = ({ children }) => {
     };
   }, [band, dashboard]);
 
-  // 새 알림 이벤트
+  // sensor_summary - 센서 요약 (대시보드용)
   useEffect(() => {
-    const handleNewAlert = (data) => {
-      console.log('🚨 New alert received:', data);
-      dashboard.addAlert(data);
+    const handleSensorSummary = (data) => {
+      console.log('sensor_summary received:', data);
+
+      dashboard.updateBandStatus(data.bid, {
+        hr: data.hr,
+        spo2: data.spo2,
+      });
     };
 
-    socketService.on('alert_new', handleNewAlert);
+    socketService.on('sensor_summary', handleSensorSummary);
 
     return () => {
-      socketService.off('alert_new', handleNewAlert);
+      socketService.off('sensor_summary', handleSensorSummary);
     };
   }, [dashboard]);
 
-  // 밴드 상태 변경 이벤트
+  // location_update - 위치 업데이트
+  useEffect(() => {
+    const handleLocationUpdate = (data) => {
+      console.log('location_update received:', data);
+
+      dashboard.updateBandStatus(data.bid, {
+        latitude: data.latitude,
+        longitude: data.longitude,
+        address: data.address,
+        location_type: data.location_type,
+      });
+    };
+
+    socketService.on('location_update', handleLocationUpdate);
+
+    return () => {
+      socketService.off('location_update', handleLocationUpdate);
+    };
+  }, [dashboard]);
+
+  // band_status - 밴드 상태 변경
   useEffect(() => {
     const handleBandStatus = (data) => {
-      console.log('📱 Band status changed:', data);
-      dashboard.updateBandStatus(data.band_id, {
+      console.log('band_status received:', data);
+
+      dashboard.updateBandStatus(data.bid, {
         status: data.status,
-        connect_state: data.connect_state,
+        battery: data.battery,
       });
     };
 
@@ -91,6 +127,136 @@ export const SocketProvider = ({ children }) => {
 
     return () => {
       socketService.off('band_status', handleBandStatus);
+    };
+  }, [dashboard]);
+
+  // alert_new - 새 알림
+  useEffect(() => {
+    const handleAlertNew = (data) => {
+      console.log('!!! SOCKET.IO alert_new received:', data);
+      console.log('=== ALERT_NEW RECEIVED ===');
+      console.log('Raw data:', JSON.stringify(data));
+
+      // 이벤트 타입에 따른 메시지 및 레벨 설정
+      let alertLevel = 'warning';
+      switch (data.event_type) {
+        case 'hr_high':
+        case 'hr_low':
+          alertLevel = data.event_level >= 3 ? 'danger' : 'warning';
+          break;
+        case 'spo2_low':
+          alertLevel = 'danger';
+          break;
+        case 'fall':
+          alertLevel = 'danger';
+          break;
+        case 'sos':
+          alertLevel = 'danger';
+          break;
+        default:
+          alertLevel = data.event_level >= 3 ? 'danger' : 'warning';
+      }
+
+      const alert = {
+        id: Date.now(), // 항상 현재 시간을 사용하여 실시간 알림 표시
+        dbId: data.id, // DB ID는 별도 필드에 저장
+        userName: data.wearer_name || data.bid,
+        message: data.message,
+        level: alertLevel,
+        bid: data.bid,
+        type: data.event_type,
+        datetime: data.datetime,
+      };
+
+      console.log('Processed alert:', JSON.stringify(alert));
+      console.log('Calling dashboard.addAlert...');
+
+      dashboard.addAlert(alert);
+      dashboard.addEvent(alert);
+
+      console.log('=== ALERT_NEW PROCESSED ===');
+    };
+
+    console.log('Registering alert_new handler');
+    socketService.on('alert_new', handleAlertNew);
+
+    return () => {
+      console.log('Unregistering alert_new handler');
+      socketService.off('alert_new', handleAlertNew);
+    };
+  }, []); // dashboard 의존성 제거 - 한 번만 등록
+
+  // dashboard_data - 대시보드 전체 데이터
+  useEffect(() => {
+    const handleDashboardData = (data) => {
+      console.log('dashboard_data received:', data);
+      // 필요시 대시보드 전체 데이터 업데이트
+    };
+
+    socketService.on('dashboard_data', handleDashboardData);
+
+    return () => {
+      socketService.off('dashboard_data', handleDashboardData);
+    };
+  }, [dashboard]);
+
+  // band_list - 밴드 목록
+  useEffect(() => {
+    const handleBandList = (data) => {
+      console.log('band_list received:', data);
+      // 필요시 밴드 목록 업데이트
+    };
+
+    socketService.on('band_list', handleBandList);
+
+    return () => {
+      socketService.off('band_list', handleBandList);
+    };
+  }, []);
+
+  // stimulator_connected - 신경자극기 연결
+  useEffect(() => {
+    const handleStimulatorConnected = (data) => {
+      console.log('stimulator_connected received:', data);
+
+      const alert = {
+        id: Date.now(),
+        userName: data.bid,
+        message: '신경자극기 연결됨',
+        level: 'info',
+        bid: data.bid,
+      };
+
+      dashboard.addAlert(alert);
+    };
+
+    socketService.on('stimulator_connected', handleStimulatorConnected);
+
+    return () => {
+      socketService.off('stimulator_connected', handleStimulatorConnected);
+    };
+  }, [dashboard]);
+
+  // stimulator_disconnected - 신경자극기 연결 해제
+  useEffect(() => {
+    const handleStimulatorDisconnected = (data) => {
+      console.log('stimulator_disconnected received:', data);
+
+      const alert = {
+        id: Date.now(),
+        userName: data.bid,
+        message: '신경자극기 연결 해제됨',
+        level: 'info',
+        bid: data.bid,
+      };
+
+      dashboard.addAlert(alert);
+    };
+
+    socketService.on('stimulator_disconnected', handleStimulatorDisconnected);
+
+    return () => {
+      socketService.off('stimulator_disconnected', handleStimulatorDisconnected);
     };
   }, [dashboard]);
 
