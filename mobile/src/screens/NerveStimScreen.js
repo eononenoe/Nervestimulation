@@ -6,8 +6,11 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
+  Platform,
+  Modal,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import DropDownPicker from 'react-native-dropdown-picker';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import StatCard from '../components/StatCard';
 import AppHeader from '../components/AppHeader';
 import { colors, shadow } from '../utils/theme';
@@ -16,8 +19,11 @@ import { scaleFontSize, scaleSize, spacing } from '../utils/responsive';
 const NerveStimScreen = () => {
   // 새 세션 생성 폼 상태
   const [selectedBand, setSelectedBand] = useState('');
+  const [bandOpen, setBandOpen] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState('');
+  const [levelOpen, setLevelOpen] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState('');
+  const [durationOpen, setDurationOpen] = useState(false);
 
   // 모의 밴드 데이터
   const bands = [
@@ -120,9 +126,26 @@ const NerveStimScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <AppHeader />
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+    <>
+      {/* 드롭다운 오버레이 */}
+      {(bandOpen || levelOpen || durationOpen) && (
+        <Modal
+          visible={bandOpen || levelOpen || durationOpen}
+          transparent={true}
+          animationType="none"
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(128, 128, 128, 0.5)',
+            }}
+          />
+        </Modal>
+      )}
+
+      <SafeAreaView style={styles.container}>
+        <AppHeader />
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.screenTitle}>신경자극 관리</Text>
 
         {/* 통계 카드 */}
@@ -167,62 +190,233 @@ const NerveStimScreen = () => {
           <View style={styles.formRow}>
             <View style={styles.formItem}>
               <Text style={styles.formLabel}>밴드 선택</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={selectedBand}
-                  onValueChange={setSelectedBand}
-                  style={styles.picker}
-                >
-                  <Picker.Item label="밴드 선택" value="" />
-                  {bands.map(band => (
-                    <Picker.Item
-                      key={band.id}
-                      label={`${band.name} (${band.id.slice(-4)})`}
-                      value={band.id}
-                    />
-                  ))}
-                </Picker>
-              </View>
+              <DropDownPicker
+                open={bandOpen}
+                value={selectedBand}
+                items={bands.map(band => ({
+                  label: `${band.name} (${band.id.slice(-4)})`,
+                  value: band.id
+                }))}
+                setOpen={setBandOpen}
+                setValue={setSelectedBand}
+                placeholder="밴드 선택"
+                listMode="MODAL"
+                modalProps={{
+                  animationType: "fade",
+                  transparent: true,
+                }}
+                modalContentContainerStyle={{
+                  backgroundColor: 'white',
+                  borderRadius: scaleSize(16),
+                  padding: spacing.md,
+                  maxHeight: '50%',
+                  width: '80%',
+                  alignSelf: 'center',
+                  marginTop: '25%',
+                }}
+                modalTitleStyle={{
+                  fontSize: scaleFontSize(16),
+                  fontWeight: 'bold',
+                  color: colors.text,
+                  flex: 1,
+                  marginTop: scaleSize(6),
+                }}
+                modalTitle="밴드 선택"
+                showTickIcon={true}
+                TickIconComponent={({style}) => (
+                  <MaterialCommunityIcons name="check" size={20} color={colors.text} />
+                )}
+                CloseIconComponent={({style}) => (
+                  <View style={{
+                    backgroundColor: 'white',
+                    borderWidth: 1,
+                    borderColor: '#BDBDBD',
+                    borderRadius: scaleSize(6),
+                    paddingVertical: scaleSize(6),
+                    paddingHorizontal: scaleSize(12),
+                  }}>
+                    <Text style={{ fontSize: scaleFontSize(12), color: '#666' }}>닫기</Text>
+                  </View>
+                )}
+                closeIconContainerStyle={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                modalTitleContainerStyle={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingBottom: spacing.sm,
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#BDBDBD',
+                  marginBottom: spacing.sm,
+                }}
+                style={styles.dropdown}
+                textStyle={styles.dropdownText}
+                placeholderStyle={styles.dropdownPlaceholder}
+                listItemContainerStyle={{
+                  height: scaleSize(50),
+                  justifyContent: 'center',
+                }}
+                listItemLabelStyle={{ fontSize: scaleFontSize(14), color: colors.text }}
+                itemSeparator={true}
+                itemSeparatorStyle={{
+                  backgroundColor: '#E0E0E0',
+                }}
+              />
             </View>
 
             <View style={styles.formItem}>
               <Text style={styles.formLabel}>단계 선택</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={selectedLevel}
-                  onValueChange={setSelectedLevel}
-                  style={styles.picker}
-                >
-                  <Picker.Item label="단계 선택" value="" />
-                  {[1, 2, 3, 4, 5, 6, 7].map(level => (
-                    <Picker.Item
-                      key={level}
-                      label={`단계 ${level}`}
-                      value={level.toString()}
-                    />
-                  ))}
-                </Picker>
-              </View>
+              <DropDownPicker
+                open={levelOpen}
+                value={selectedLevel}
+                items={[1, 2, 3, 4, 5, 6, 7].map(level => ({
+                  label: `단계 ${level}`,
+                  value: level.toString()
+                }))}
+                setOpen={setLevelOpen}
+                setValue={setSelectedLevel}
+                placeholder="단계 선택"
+                listMode="MODAL"
+                modalProps={{
+                  animationType: "fade",
+                  transparent: true,
+                }}
+                modalContentContainerStyle={{
+                  backgroundColor: 'white',
+                  borderRadius: scaleSize(16),
+                  padding: spacing.md,
+                  maxHeight: '50%',
+                  width: '80%',
+                  alignSelf: 'center',
+                  marginTop: '25%',
+                }}
+                modalTitleStyle={{
+                  fontSize: scaleFontSize(16),
+                  fontWeight: 'bold',
+                  color: colors.text,
+                  flex: 1,
+                  marginTop: scaleSize(6),
+                }}
+                modalTitle="단계 선택"
+                showTickIcon={true}
+                TickIconComponent={({style}) => (
+                  <MaterialCommunityIcons name="check" size={20} color={colors.text} />
+                )}
+                CloseIconComponent={({style}) => (
+                  <View style={{
+                    backgroundColor: 'white',
+                    borderWidth: 1,
+                    borderColor: '#BDBDBD',
+                    borderRadius: scaleSize(6),
+                    paddingVertical: scaleSize(6),
+                    paddingHorizontal: scaleSize(12),
+                  }}>
+                    <Text style={{ fontSize: scaleFontSize(12), color: '#666' }}>닫기</Text>
+                  </View>
+                )}
+                closeIconContainerStyle={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                modalTitleContainerStyle={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingBottom: spacing.sm,
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#BDBDBD',
+                  marginBottom: spacing.sm,
+                }}
+                style={styles.dropdown}
+                textStyle={styles.dropdownText}
+                placeholderStyle={styles.dropdownPlaceholder}
+                listItemContainerStyle={{
+                  height: scaleSize(50),
+                  justifyContent: 'center',
+                }}
+                listItemLabelStyle={{ fontSize: scaleFontSize(14), color: colors.text }}
+                itemSeparator={true}
+                itemSeparatorStyle={{
+                  backgroundColor: '#E0E0E0',
+                }}
+              />
             </View>
 
             <View style={styles.formItem}>
               <Text style={styles.formLabel}>시간 선택</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={selectedDuration}
-                  onValueChange={setSelectedDuration}
-                  style={styles.picker}
-                >
-                  <Picker.Item label="시간 선택" value="" />
-                  {[15, 20, 25, 30].map(duration => (
-                    <Picker.Item
-                      key={duration}
-                      label={`${duration}분`}
-                      value={duration.toString()}
-                    />
-                  ))}
-                </Picker>
-              </View>
+              <DropDownPicker
+                open={durationOpen}
+                value={selectedDuration}
+                items={[15, 20, 25, 30].map(duration => ({
+                  label: `${duration}분`,
+                  value: duration.toString()
+                }))}
+                setOpen={setDurationOpen}
+                setValue={setSelectedDuration}
+                placeholder="시간 선택"
+                listMode="MODAL"
+                modalProps={{
+                  animationType: "fade",
+                  transparent: true,
+                }}
+                modalContentContainerStyle={{
+                  backgroundColor: 'white',
+                  borderRadius: scaleSize(16),
+                  padding: spacing.md,
+                  maxHeight: '40%',
+                  width: '80%',
+                  alignSelf: 'center',
+                  marginTop: '30%',
+                }}
+                modalTitleStyle={{
+                  fontSize: scaleFontSize(16),
+                  fontWeight: 'bold',
+                  color: colors.text,
+                  flex: 1,
+                  marginTop: scaleSize(6),
+                }}
+                modalTitle="시간 선택"
+                showTickIcon={true}
+                TickIconComponent={({style}) => (
+                  <MaterialCommunityIcons name="check" size={20} color={colors.text} />
+                )}
+                CloseIconComponent={({style}) => (
+                  <View style={{
+                    backgroundColor: 'white',
+                    borderWidth: 1,
+                    borderColor: '#BDBDBD',
+                    borderRadius: scaleSize(6),
+                    paddingVertical: scaleSize(6),
+                    paddingHorizontal: scaleSize(12),
+                  }}>
+                    <Text style={{ fontSize: scaleFontSize(12), color: '#666' }}>닫기</Text>
+                  </View>
+                )}
+                closeIconContainerStyle={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                modalTitleContainerStyle={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingBottom: spacing.sm,
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#BDBDBD',
+                  marginBottom: spacing.sm,
+                }}
+                style={styles.dropdown}
+                textStyle={styles.dropdownText}
+                placeholderStyle={styles.dropdownPlaceholder}
+                listItemContainerStyle={{
+                  height: scaleSize(50),
+                  justifyContent: 'center',
+                }}
+                listItemLabelStyle={{ fontSize: scaleFontSize(14), color: colors.text }}
+                itemSeparator={true}
+                itemSeparatorStyle={{
+                  backgroundColor: '#E0E0E0',
+                }}
+              />
             </View>
 
             <TouchableOpacity style={styles.createButton} onPress={createSession}>
@@ -291,7 +485,8 @@ const NerveStimScreen = () => {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </>
   );
 };
 
@@ -330,6 +525,7 @@ const styles = StyleSheet.create({
     borderRadius: scaleSize(14),
     padding: spacing.md,
     marginBottom: spacing.lg,
+    overflow: 'visible',
   },
   formRow: {
     flexDirection: 'row',
@@ -337,23 +533,33 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   formItem: {
-    flex: 1,
-    minWidth: '30%',
+    width: scaleSize(150),
   },
   formLabel: {
     fontSize: scaleFontSize(12),
     color: colors.textSecondary,
     marginBottom: spacing.xs,
   },
-  pickerContainer: {
+  dropdown: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: scaleSize(8),
-    overflow: 'hidden',
     backgroundColor: 'white',
-  },
-  picker: {
+    width: scaleSize(150),
     height: scaleSize(44),
+    minHeight: scaleSize(44),
+  },
+  dropdownText: {
+    fontSize: scaleFontSize(12),
+    color: colors.text,
+  },
+  dropdownPlaceholder: {
+    fontSize: scaleFontSize(12),
+    color: colors.textSecondary,
+  },
+  dropdownContainer: {
+    borderColor: colors.border,
+    backgroundColor: 'white',
   },
   createButton: {
     backgroundColor: colors.primary,

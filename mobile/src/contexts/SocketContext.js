@@ -1,4 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import socketService from '../services/socket';
 import { useAuth } from './AuthContext';
 import { useDashboard } from './DashboardContext';
@@ -14,10 +16,62 @@ export const useSocket = () => {
   return context;
 };
 
+// Expo에서 자동으로 PC IP 감지
+const getLocalIP = () => {
+  try {
+    const hostUri = Constants.expoConfig?.hostUri || Constants.manifest?.hostUri;
+    const debuggerHost = Constants.manifest?.debuggerHost;
+
+    const host = hostUri || debuggerHost;
+    if (host) {
+      const ip = host.split(':')[0];
+      console.log('🔍 Auto-detected PC IP for Socket:', ip);
+      return ip;
+    }
+  } catch (error) {
+    console.warn('⚠️ Failed to auto-detect IP for Socket:', error);
+  }
+
+  console.log('⚠️ Using fallback IP for Socket: 192.168.0.100');
+  return '192.168.0.100';
+};
+
+// Socket URL 자동 감지
+// - Android 에뮬레이터: 10.0.2.2
+// - iOS 시뮬레이터: localhost
+// - 실제 기기 (아이폰 등): 자동 감지된 PC IP 주소
+const getSocketUrl = () => {
+  if (process.env.SOCKET_URL) {
+    console.log('✅ Using SOCKET_URL from env:', process.env.SOCKET_URL);
+    return process.env.SOCKET_URL;
+  }
+
+  const LOCAL_IP = getLocalIP();
+  const isAndroid = Platform.OS === 'android';
+  const isIOS = Platform.OS === 'ios';
+  const isExpoGo = Constants.appOwnership === 'expo';
+
+  let socketUrl;
+
+  if (isAndroid) {
+    socketUrl = 'http://10.0.2.2:5000';
+  } else if (isIOS) {
+    if (isExpoGo || __DEV__) {
+      socketUrl = `http://${LOCAL_IP}:5000`;
+    } else {
+      socketUrl = 'http://localhost:5000';
+    }
+  } else {
+    socketUrl = `http://${LOCAL_IP}:5000`;
+  }
+
+  console.log('🔌 Socket URL:', socketUrl);
+  return socketUrl;
+};
+
 export const SocketProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
-  // adb reverse tcp:5000 tcp:5000 실행 후 localhost 사용 가능
-  const [serverUrl, setServerUrl] = useState(process.env.SOCKET_URL || 'http://localhost:5000');
+  const [serverUrl, setServerUrl] = useState(getSocketUrl());
 
   const { token, isAuthenticated } = useAuth();
   const dashboard = useDashboard();

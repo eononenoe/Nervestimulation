@@ -7,15 +7,19 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Platform,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import DropDownPicker from 'react-native-dropdown-picker';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
 import { colors, shadow } from '../utils/theme';
 import { scaleFontSize, scaleSize, spacing } from '../utils/responsive';
 
 const ReportScreen = () => {
   const [selectedUser, setSelectedUser] = useState('467191213660619');
+  const [userOpen, setUserOpen] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('7');
+  const [periodOpen, setPeriodOpen] = useState(false);
 
   // 모의 사용자 데이터
   const users = [
@@ -73,35 +77,178 @@ const ReportScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <AppHeader />
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+    <>
+      {/* 드롭다운 오버레이 */}
+      {(userOpen || periodOpen) && (
+        <Modal
+          visible={userOpen || periodOpen}
+          transparent={true}
+          animationType="none"
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(128, 128, 128, 0.5)',
+            }}
+          />
+        </Modal>
+      )}
+
+      <SafeAreaView style={styles.container}>
+        <AppHeader />
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.screenTitle}>건강 리포트</Text>
 
         {/* 필터 및 액션 버튼 */}
         <View style={[styles.card, shadow.small]}>
           <View style={styles.filterRow}>
-            <View style={styles.pickerWrapper}>
-              <Picker
-                selectedValue={selectedUser}
-                onValueChange={setSelectedUser}
-                style={styles.picker}
-              >
-                {users.map(user => (
-                  <Picker.Item key={user.id} label={user.name} value={user.id} />
-                ))}
-              </Picker>
+            <View style={{ width: scaleSize(150) }}>
+              <DropDownPicker
+                open={userOpen}
+                value={selectedUser}
+                items={users.map(user => ({ label: user.name, value: user.id }))}
+                setOpen={setUserOpen}
+                setValue={setSelectedUser}
+                placeholder="사용자 선택"
+                listMode="MODAL"
+                modalProps={{
+                  animationType: "fade",
+                  transparent: true,
+                }}
+                modalContentContainerStyle={{
+                  backgroundColor: 'white',
+                  borderRadius: scaleSize(16),
+                  padding: spacing.md,
+                  maxHeight: '50%',
+                  width: '80%',
+                  alignSelf: 'center',
+                  marginTop: '25%',
+                }}
+                modalTitleStyle={{
+                  fontSize: scaleFontSize(16),
+                  fontWeight: 'bold',
+                  color: colors.text,
+                  flex: 1,
+                  marginTop: scaleSize(6),
+                }}
+                modalTitle="사용자 선택"
+                showTickIcon={true}
+                TickIconComponent={({style}) => (
+                  <MaterialCommunityIcons name="check" size={20} color={colors.text} />
+                )}
+                CloseIconComponent={({style}) => (
+                  <View style={{
+                    backgroundColor: 'white',
+                    borderWidth: 1,
+                    borderColor: '#BDBDBD',
+                    borderRadius: scaleSize(6),
+                    paddingVertical: scaleSize(6),
+                    paddingHorizontal: scaleSize(12),
+                  }}>
+                    <Text style={{ fontSize: scaleFontSize(12), color: '#666' }}>닫기</Text>
+                  </View>
+                )}
+                closeIconContainerStyle={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                modalTitleContainerStyle={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingBottom: spacing.sm,
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#BDBDBD',
+                  marginBottom: spacing.sm,
+                }}
+                style={styles.dropdown}
+                textStyle={styles.dropdownText}
+                placeholderStyle={styles.dropdownPlaceholder}
+                listItemContainerStyle={{
+                  height: scaleSize(50),
+                  justifyContent: 'center',
+                }}
+                listItemLabelStyle={{ fontSize: scaleFontSize(14), color: colors.text }}
+                itemSeparator={true}
+                itemSeparatorStyle={{
+                  backgroundColor: '#E0E0E0',
+                }}
+              />
             </View>
-            <View style={styles.pickerWrapperSmall}>
-              <Picker
-                selectedValue={selectedPeriod}
-                onValueChange={setSelectedPeriod}
-                style={styles.picker}
-              >
-                <Picker.Item label="최근 7일" value="7" />
-                <Picker.Item label="최근 14일" value="14" />
-                <Picker.Item label="최근 30일" value="30" />
-              </Picker>
+            <View style={{ width: scaleSize(110) }}>
+              <DropDownPicker
+                open={periodOpen}
+                value={selectedPeriod}
+                items={[
+                  { label: '최근 7일', value: '7' },
+                  { label: '최근 14일', value: '14' },
+                  { label: '최근 30일', value: '30' },
+                ]}
+                setOpen={setPeriodOpen}
+                setValue={setSelectedPeriod}
+                placeholder="기간 선택"
+                listMode="MODAL"
+                modalProps={{
+                  animationType: "fade",
+                  transparent: true,
+                }}
+                modalContentContainerStyle={{
+                  backgroundColor: 'white',
+                  borderRadius: scaleSize(16),
+                  padding: spacing.md,
+                  maxHeight: '35%',
+                  width: '80%',
+                  alignSelf: 'center',
+                  marginTop: '30%',
+                }}
+                modalTitleStyle={{
+                  fontSize: scaleFontSize(16),
+                  fontWeight: 'bold',
+                  color: colors.text,
+                  flex: 1,
+                  marginTop: scaleSize(6),
+                }}
+                modalTitle="기간 선택"
+                showTickIcon={true}
+                TickIconComponent={({style}) => (
+                  <MaterialCommunityIcons name="check" size={20} color={colors.text} />
+                )}
+                CloseIconComponent={({style}) => (
+                  <View style={{
+                    backgroundColor: 'white',
+                    borderWidth: 1,
+                    borderColor: '#BDBDBD',
+                    borderRadius: scaleSize(6),
+                    paddingVertical: scaleSize(6),
+                    paddingHorizontal: scaleSize(12),
+                  }}>
+                    <Text style={{ fontSize: scaleFontSize(12), color: '#666' }}>닫기</Text>
+                  </View>
+                )}
+                closeIconContainerStyle={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                modalTitleContainerStyle={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingBottom: spacing.sm,
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#BDBDBD',
+                  marginBottom: spacing.sm,
+                }}
+                style={styles.dropdownSmall}
+                textStyle={styles.dropdownText}
+                placeholderStyle={styles.dropdownPlaceholder}
+                listItemContainerStyle={{
+                  height: scaleSize(50),
+                  justifyContent: 'center',
+                }}
+                listItemLabelStyle={{ fontSize: scaleFontSize(14), color: colors.text }}
+                itemSeparator={true}
+                itemSeparatorStyle={{
+                  backgroundColor: '#E0E0E0',
+                }}
+              />
             </View>
           </View>
           <View style={styles.buttonRow}>
@@ -175,7 +322,8 @@ const ReportScreen = () => {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </>
   );
 };
 
@@ -199,30 +347,44 @@ const styles = StyleSheet.create({
     borderRadius: scaleSize(14),
     padding: spacing.md,
     marginBottom: spacing.md,
+    overflow: 'visible',
   },
   filterRow: {
     flexDirection: 'row',
     gap: spacing.sm,
     marginBottom: spacing.sm,
   },
-  pickerWrapper: {
-    flex: 1,
+  dropdown: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: scaleSize(8),
-    overflow: 'hidden',
     backgroundColor: 'white',
-  },
-  pickerWrapperSmall: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: scaleSize(8),
-    overflow: 'hidden',
-    backgroundColor: 'white',
-    minWidth: scaleSize(110),
-  },
-  picker: {
+    width: scaleSize(150),
     height: scaleSize(44),
+    minHeight: scaleSize(44),
+    zIndex: 3000,
+  },
+  dropdownSmall: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: scaleSize(8),
+    backgroundColor: 'white',
+    width: scaleSize(110),
+    height: scaleSize(44),
+    minHeight: scaleSize(44),
+    zIndex: 2000,
+  },
+  dropdownText: {
+    fontSize: scaleFontSize(12),
+    color: colors.text,
+  },
+  dropdownPlaceholder: {
+    fontSize: scaleFontSize(12),
+    color: colors.textSecondary,
+  },
+  dropdownContainer: {
+    borderColor: colors.border,
+    backgroundColor: 'white',
   },
   buttonRow: {
     flexDirection: 'row',

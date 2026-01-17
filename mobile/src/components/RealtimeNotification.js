@@ -116,34 +116,48 @@ const RealtimeNotification = ({ visible, type, message, userName, onPress, onClo
         },
       ]}
     >
-      <TouchableOpacity
-        style={[styles.notification, shadow.medium]}
-        onPress={onPress}
-        activeOpacity={0.9}
-      >
-        <View style={[styles.iconContainer, { backgroundColor: config.bgColor }]}>
-          <MaterialCommunityIcons
-            name={config.icon}
-            size={scaleSize(24)}
-            color={config.iconColor}
-          />
-        </View>
+      <View style={[styles.notification, shadow.medium]}>
+        {/* 알림 헤더 */}
+        <View style={styles.header}>
+          <View style={[styles.iconContainer, { backgroundColor: config.bgColor }]}>
+            <MaterialCommunityIcons
+              name={config.icon}
+              size={scaleSize(24)}
+              color={config.iconColor}
+            />
+          </View>
 
-        <View style={styles.content}>
-          {userName && (
-            <Text style={styles.userName} numberOfLines={1}>
-              {userName}
+          <View style={styles.content}>
+            {userName && (
+              <Text style={styles.userName} numberOfLines={1}>
+                {userName}
+              </Text>
+            )}
+            <Text style={styles.message} numberOfLines={2}>
+              {message}
             </Text>
-          )}
-          <Text style={styles.message} numberOfLines={2}>
-            {message}
-          </Text>
+          </View>
         </View>
 
-        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-          <MaterialCommunityIcons name="close" size={scaleSize(20)} color={colors.textLight} />
-        </TouchableOpacity>
-      </TouchableOpacity>
+        {/* 버튼 영역 */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[styles.button, styles.detailButton, { marginRight: spacing.sm }]}
+            onPress={onPress}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.detailButtonText}>상세보기</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.closeButtonNew]}
+            onPress={handleClose}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.closeButtonText}>닫기</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </Animated.View>
   );
 };
@@ -151,7 +165,7 @@ const RealtimeNotification = ({ visible, type, message, userName, onPress, onClo
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? scaleSize(50) : scaleSize(10),
+    top: Platform.OS === 'ios' ? scaleSize(80) : scaleSize(40),
     left: spacing.md,
     right: spacing.md,
     zIndex: 1000,
@@ -160,8 +174,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: scaleSize(12),
     padding: spacing.md,
+  },
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: spacing.md,
   },
   iconContainer: {
     width: scaleSize(48),
@@ -173,7 +190,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    marginRight: spacing.sm,
   },
   userName: {
     fontSize: scaleFontSize(14),
@@ -186,8 +202,34 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: scaleFontSize(16),
   },
-  closeButton: {
-    padding: spacing.xs,
+  buttonContainer: {
+    flexDirection: 'row',
+  },
+  button: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: scaleSize(8),
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  detailButton: {
+    backgroundColor: 'white',
+    borderColor: '#D1D5DB',
+  },
+  detailButtonText: {
+    fontSize: scaleFontSize(14),
+    fontWeight: '600',
+    color: colors.text,
+  },
+  closeButtonNew: {
+    backgroundColor: 'white',
+    borderColor: '#D1D5DB',
+  },
+  closeButtonText: {
+    fontSize: scaleFontSize(14),
+    fontWeight: '500',
+    color: colors.textSecondary,
   },
 });
 

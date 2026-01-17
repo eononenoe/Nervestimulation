@@ -9,8 +9,9 @@ import {
   TextInput,
   Modal,
   Alert,
+  Platform,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import DropDownPicker from 'react-native-dropdown-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
 import { colors, shadow } from '../utils/theme';
@@ -19,10 +20,13 @@ import { scaleFontSize, scaleSize, spacing } from '../utils/responsive';
 const UserManageScreen = ({ navigation }) => {
   const [searchText, setSearchText] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
+  const [groupFilterOpen, setGroupFilterOpen] = useState(false);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [groupModalVisible, setGroupModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [newUserGroupOpen, setNewUserGroupOpen] = useState(false);
+  const [editUserGroupOpen, setEditUserGroupOpen] = useState(false);
 
   // 새 사용자 폼 데이터
   const [newUserName, setNewUserName] = useState('');
@@ -93,9 +97,26 @@ const UserManageScreen = ({ navigation }) => {
   });
 
   return (
-    <SafeAreaView style={styles.container}>
-      <AppHeader />
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+    <>
+      {/* 드롭다운 오버레이 */}
+      {(groupFilterOpen || newUserGroupOpen || editUserGroupOpen) && (
+        <Modal
+          visible={groupFilterOpen || newUserGroupOpen || editUserGroupOpen}
+          transparent={true}
+          animationType="none"
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(128, 128, 128, 0.5)',
+            }}
+          />
+        </Modal>
+      )}
+
+      <SafeAreaView style={styles.container}>
+        <AppHeader />
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.screenTitle}>사용자</Text>
 
         {/* 검색 및 필터 */}
@@ -111,17 +132,80 @@ const UserManageScreen = ({ navigation }) => {
                 placeholderTextColor={colors.textLight}
               />
             </View>
-            <View style={styles.pickerWrapper}>
-              <Picker
-                selectedValue={groupFilter}
-                onValueChange={setGroupFilter}
-                style={styles.picker}
-              >
-                <Picker.Item label="그룹 전체" value="" />
-                {groups.map(group => (
-                  <Picker.Item key={group} label={group} value={group} />
-                ))}
-              </Picker>
+            <View style={{ width: scaleSize(100) }}>
+              <DropDownPicker
+                open={groupFilterOpen}
+                value={groupFilter}
+                items={[
+                  { label: '전체', value: '' },
+                  ...groups.map(group => ({ label: group, value: group }))
+                ]}
+                setOpen={setGroupFilterOpen}
+                setValue={setGroupFilter}
+                placeholder="그룹 선택"
+                listMode="MODAL"
+                modalProps={{
+                  animationType: "fade",
+                  transparent: true,
+                }}
+                modalContentContainerStyle={{
+                  backgroundColor: 'white',
+                  borderRadius: scaleSize(16),
+                  padding: spacing.md,
+                  maxHeight: '40%',
+                  width: '80%',
+                  alignSelf: 'center',
+                  marginTop: '30%',
+                }}
+                modalTitleStyle={{
+                  fontSize: scaleFontSize(16),
+                  fontWeight: 'bold',
+                  color: colors.text,
+                  flex: 1,
+                  marginTop: scaleSize(6),
+                }}
+                modalTitle="그룹 선택"
+                showTickIcon={true}
+                TickIconComponent={({style}) => (
+                  <MaterialCommunityIcons name="check" size={20} color={colors.text} />
+                )}
+                CloseIconComponent={({style}) => (
+                  <View style={{
+                    backgroundColor: 'white',
+                    borderWidth: 1,
+                    borderColor: '#BDBDBD',
+                    borderRadius: scaleSize(6),
+                    paddingVertical: scaleSize(6),
+                    paddingHorizontal: scaleSize(12),
+                  }}>
+                    <Text style={{ fontSize: scaleFontSize(12), color: '#666' }}>닫기</Text>
+                  </View>
+                )}
+                closeIconContainerStyle={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                modalTitleContainerStyle={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingBottom: spacing.sm,
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#BDBDBD',
+                  marginBottom: spacing.sm,
+                }}
+                style={styles.dropdown}
+                textStyle={styles.dropdownText}
+                placeholderStyle={styles.dropdownPlaceholder}
+                listItemContainerStyle={{
+                  height: scaleSize(50),
+                  justifyContent: 'center',
+                }}
+                listItemLabelStyle={{ fontSize: scaleFontSize(14), color: colors.text }}
+                itemSeparator={true}
+                itemSeparatorStyle={{
+                  backgroundColor: '#E0E0E0',
+                }}
+              />
             </View>
           </View>
           <View style={styles.buttonRow}>
@@ -257,17 +341,76 @@ const UserManageScreen = ({ navigation }) => {
 
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>그룹</Text>
-                <View style={styles.pickerWrapper}>
-                  <Picker
-                    selectedValue={newUserGroup}
-                    onValueChange={setNewUserGroup}
-                    style={styles.picker}
-                  >
-                    {groups.map(group => (
-                      <Picker.Item key={group} label={group} value={group} />
-                    ))}
-                  </Picker>
-                </View>
+                <DropDownPicker
+                  open={newUserGroupOpen}
+                  value={newUserGroup}
+                  items={groups.map(group => ({ label: group, value: group }))}
+                  setOpen={setNewUserGroupOpen}
+                  setValue={setNewUserGroup}
+                  placeholder="그룹 선택"
+                  listMode="MODAL"
+                  modalProps={{
+                    animationType: "fade",
+                    transparent: true,
+                  }}
+                  modalContentContainerStyle={{
+                    backgroundColor: 'white',
+                    borderRadius: scaleSize(16),
+                    padding: spacing.md,
+                    maxHeight: '40%',
+                    width: '80%',
+                    alignSelf: 'center',
+                    marginTop: '30%',
+                  }}
+                  modalTitleStyle={{
+                    fontSize: scaleFontSize(16),
+                    fontWeight: 'bold',
+                    color: colors.text,
+                    flex: 1,
+                    marginTop: scaleSize(6),
+                  }}
+                  modalTitle="그룹 선택"
+                  showTickIcon={true}
+                  TickIconComponent={({style}) => (
+                    <MaterialCommunityIcons name="check" size={20} color={colors.text} />
+                  )}
+                  CloseIconComponent={({style}) => (
+                    <View style={{
+                      backgroundColor: 'white',
+                      borderWidth: 1,
+                      borderColor: '#BDBDBD',
+                      borderRadius: scaleSize(6),
+                      paddingVertical: scaleSize(6),
+                      paddingHorizontal: scaleSize(12),
+                    }}>
+                      <Text style={{ fontSize: scaleFontSize(12), color: '#666' }}>닫기</Text>
+                    </View>
+                  )}
+                  closeIconContainerStyle={{
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  modalTitleContainerStyle={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingBottom: spacing.sm,
+                    borderBottomWidth: 1,
+                    borderBottomColor: '#BDBDBD',
+                    marginBottom: spacing.sm,
+                  }}
+                  style={styles.dropdown}
+                  textStyle={styles.dropdownText}
+                  placeholderStyle={styles.dropdownPlaceholder}
+                  listItemContainerStyle={{
+                    height: scaleSize(50),
+                    justifyContent: 'center',
+                  }}
+                  listItemLabelStyle={{ fontSize: scaleFontSize(14), color: colors.text }}
+                  itemSeparator={true}
+                  itemSeparatorStyle={{
+                    backgroundColor: '#E0E0E0',
+                  }}
+                />
               </View>
 
               <View style={styles.formGroup}>
@@ -339,16 +482,79 @@ const UserManageScreen = ({ navigation }) => {
 
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>그룹</Text>
-                <View style={styles.pickerWrapper}>
-                  <Picker
-                    selectedValue={selectedUser?.group}
-                    style={styles.picker}
-                  >
-                    {groups.map(group => (
-                      <Picker.Item key={group} label={group} value={group} />
-                    ))}
-                  </Picker>
-                </View>
+                <DropDownPicker
+                  open={editUserGroupOpen}
+                  value={selectedUser?.group}
+                  items={groups.map(group => ({ label: group, value: group }))}
+                  setOpen={setEditUserGroupOpen}
+                  setValue={(callback) => {
+                    const value = callback(selectedUser?.group);
+                    setSelectedUser({ ...selectedUser, group: value });
+                  }}
+                  placeholder="그룹 선택"
+                  listMode="MODAL"
+                  modalProps={{
+                    animationType: "fade",
+                    transparent: true,
+                  }}
+                  modalContentContainerStyle={{
+                    backgroundColor: 'white',
+                    borderRadius: scaleSize(16),
+                    padding: spacing.md,
+                    maxHeight: '40%',
+                    width: '80%',
+                    alignSelf: 'center',
+                    marginTop: '30%',
+                  }}
+                  modalTitleStyle={{
+                    fontSize: scaleFontSize(16),
+                    fontWeight: 'bold',
+                    color: colors.text,
+                    flex: 1,
+                    marginTop: scaleSize(6),
+                  }}
+                  modalTitle="그룹 선택"
+                  showTickIcon={true}
+                  TickIconComponent={({style}) => (
+                    <MaterialCommunityIcons name="check" size={20} color={colors.text} />
+                  )}
+                  CloseIconComponent={({style}) => (
+                    <View style={{
+                      backgroundColor: 'white',
+                      borderWidth: 1,
+                      borderColor: '#BDBDBD',
+                      borderRadius: scaleSize(6),
+                      paddingVertical: scaleSize(6),
+                      paddingHorizontal: scaleSize(12),
+                    }}>
+                      <Text style={{ fontSize: scaleFontSize(12), color: '#666' }}>닫기</Text>
+                    </View>
+                  )}
+                  closeIconContainerStyle={{
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  modalTitleContainerStyle={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingBottom: spacing.sm,
+                    borderBottomWidth: 1,
+                    borderBottomColor: '#BDBDBD',
+                    marginBottom: spacing.sm,
+                  }}
+                  style={styles.dropdown}
+                  textStyle={styles.dropdownText}
+                  placeholderStyle={styles.dropdownPlaceholder}
+                  listItemContainerStyle={{
+                    height: scaleSize(50),
+                    justifyContent: 'center',
+                  }}
+                  listItemLabelStyle={{ fontSize: scaleFontSize(14), color: colors.text }}
+                  itemSeparator={true}
+                  itemSeparatorStyle={{
+                    backgroundColor: '#E0E0E0',
+                  }}
+                />
               </View>
 
               <TouchableOpacity
@@ -418,7 +624,8 @@ const UserManageScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+      </SafeAreaView>
+    </>
   );
 };
 
@@ -442,10 +649,12 @@ const styles = StyleSheet.create({
     borderRadius: scaleSize(14),
     padding: spacing.md,
     marginBottom: spacing.lg,
+    overflow: 'visible',
   },
   searchRow: {
     flexDirection: 'row',
     gap: spacing.sm,
+    alignItems: 'flex-start',
     marginBottom: spacing.md,
   },
   searchInputWrapper: {
@@ -465,16 +674,27 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginLeft: spacing.xs,
   },
-  pickerWrapper: {
+  dropdown: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: scaleSize(8),
-    overflow: 'hidden',
     backgroundColor: 'white',
-    minWidth: scaleSize(100),
-  },
-  picker: {
+    width: scaleSize(100),
     height: scaleSize(44),
+    minHeight: scaleSize(44),
+    zIndex: 3000,
+  },
+  dropdownText: {
+    fontSize: scaleFontSize(12),
+    color: colors.text,
+  },
+  dropdownPlaceholder: {
+    fontSize: scaleFontSize(12),
+    color: colors.textSecondary,
+  },
+  dropdownContainer: {
+    borderColor: colors.border,
+    backgroundColor: 'white',
   },
   buttonRow: {
     flexDirection: 'row',

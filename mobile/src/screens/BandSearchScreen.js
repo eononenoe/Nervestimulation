@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,73 +8,98 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
+  Platform,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { Picker } from '@react-native-picker/picker';
+import DropDownPicker from 'react-native-dropdown-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
 import { colors, shadow } from '../utils/theme';
 import { scaleFontSize, scaleSize, spacing } from '../utils/responsive';
+import { bandAPI } from '../services/api';
 
 const BandSearchScreen = ({ navigation }) => {
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [statusOpen, setStatusOpen] = useState(false);
   const [selectedBand, setSelectedBand] = useState(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [locationModalVisible, setLocationModalVisible] = useState(false);
 
-  // 모의 밴드 데이터
-  const bands = [
-    {
-      id: '467191213660619',
-      name: '김태현',
-      status: '정상',
-      hr: 72,
-      spo2: 98,
-      battery: 85,
-    },
-    {
-      id: '467191213660620',
-      name: '강민준',
-      status: '정상',
-      hr: 68,
-      spo2: 97,
-      battery: 62,
-    },
-    {
-      id: '467191213660614',
-      name: '윤서연',
-      status: '주의',
-      hr: 92,
-      spo2: 95,
-      battery: 45,
-    },
-    {
-      id: '467191213660616',
-      name: '이수빈',
-      status: '정상',
-      hr: 75,
-      spo2: 99,
-      battery: 92,
-    },
-    {
-      id: '467191213660623',
-      name: '박도현',
-      status: '오프라인',
-      hr: 0,
-      spo2: 0,
-      battery: 15,
-    },
-  ];
+  // API 연동 상태
+  const [bands, setBands] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  // 모의 밴드 위치 데이터
-  const bandLocations = [
-    { id: '467191213660619', user: '김태현', lat: 36.1200, lng: 128.3460, status: 'online' },
-    { id: '467191213660620', user: '강민준', lat: 36.1180, lng: 128.3430, status: 'online' },
-    { id: '467191213660614', user: '윤서연', lat: 36.1210, lng: 128.3420, status: 'online' },
-    { id: '467191213660616', user: '이수빈', lat: 36.1190, lng: 128.3450, status: 'online' },
-    { id: '467191213660623', user: '박도현', lat: 36.1185, lng: 128.3440, status: 'offline' },
-  ];
+  // 밴드 데이터 로드
+  const fetchBands = async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+
+      const response = await bandAPI.getList();
+
+      if (response.data && response.data.success) {
+        // API 응답 데이터를 UI 형식으로 변환
+        const formattedBands = response.data.data.map(band => ({
+          id: band.bid,
+          name: band.wearer_name || '이름 없음',
+          status: getStatus(band),
+          hr: band.latest_hr || 0,
+          spo2: band.latest_spo2 || 0,
+          battery: band.battery || 0,
+          latitude: band.latitude,
+          longitude: band.longitude,
+          connect_state: band.connect_state,
+        }));
+
+        setBands(formattedBands);
+      }
+    } catch (err) {
+      console.error('Failed to fetch bands:', err);
+      setError('밴드 데이터를 불러오는데 실패했습니다.');
+      Alert.alert('오류', '밴드 데이터를 불러오는데 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // 밴드 상태 판단
+  const getStatus = (band) => {
+    if (band.connect_state === 0) {
+      return '오프라인';
+    }
+
+    // 최신 센서 데이터 기반 상태 판단
+    const hr = band.latest_hr || 0;
+    const spo2 = band.latest_spo2 || 0;
+
+    // 심박수 이상 (60 미만 또는 100 초과) 또는 산소포화도 이상 (95 미만)
+    if (hr > 0 && (hr < 60 || hr > 100) || (spo2 > 0 && spo2 < 95)) {
+      return '주의';
+    }
+
+    return '정상';
+  };
+
+  // 컴포넌트 마운트 시 데이터 로드
+  useEffect(() => {
+    fetchBands();
+  }, []);
+
+  // 새로고침 핸들러
+  const handleRefresh = () => {
+    fetchBands(true);
+  };
 
   const getStatusColor = (status) => {
     if (status === '정상') return colors.primary;
@@ -91,12 +116,16 @@ const BandSearchScreen = ({ navigation }) => {
     return matchSearch && matchStatus;
   });
 
-  // 선택된 밴드의 위치 찾기
-  const selectedBandLocation = selectedBand ? bandLocations.find(
-    loc => loc.id === selectedBand.id || loc.user === selectedBand.name
-  ) : null;
+  // 선택된 밴드의 위치 정보
+  const selectedBandLocation = selectedBand && selectedBand.latitude && selectedBand.longitude ? {
+    id: selectedBand.id,
+    user: selectedBand.name,
+    lat: selectedBand.latitude,
+    lng: selectedBand.longitude,
+    status: selectedBand.connect_state === 1 ? 'online' : 'offline'
+  } : null;
 
-  // 선택된 밴드의 위치 지도 HTML 생성 (대시보드 방식과 동일)
+  // 선택된 밴드의 위치 지도 HTML 생성
   const locationMapHtml = selectedBandLocation ? `
     <!DOCTYPE html>
     <html>
@@ -166,19 +195,19 @@ const BandSearchScreen = ({ navigation }) => {
 
       <View style={styles.bandStats}>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{band.hr}</Text>
+          <Text style={styles.statValue}>{band.hr || '-'}</Text>
           <Text style={styles.statLabel}>HR</Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{band.spo2}%</Text>
+          <Text style={styles.statValue}>{band.spo2 ? `${band.spo2}%` : '-'}</Text>
           <Text style={styles.statLabel}>SpO2</Text>
         </View>
         <View style={styles.statItem}>
           <Text style={[
             styles.statValue,
-            band.battery < 20 && { color: colors.danger }
+            band.battery > 0 && band.battery < 20 && { color: colors.danger }
           ]}>
-            {band.battery}%
+            {band.battery > 0 ? `${band.battery}%` : '-'}
           </Text>
           <Text style={styles.statLabel}>배터리</Text>
         </View>
@@ -207,11 +236,38 @@ const BandSearchScreen = ({ navigation }) => {
     </View>
   );
 
+  // 로딩 화면
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <AppHeader />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>밴드 데이터를 불러오는 중...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <AppHeader />
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.screenTitle}>밴드 조회</Text>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+      >
+        <View style={styles.titleRow}>
+          <Text style={styles.screenTitle}>밴드 조회</Text>
+          <Text style={styles.countText}>총 {filteredBands.length}개</Text>
+        </View>
 
         {/* 검색 및 필터 */}
         <View style={[styles.card, shadow.small]}>
@@ -226,25 +282,63 @@ const BandSearchScreen = ({ navigation }) => {
                 placeholderTextColor={colors.textLight}
               />
             </View>
-            <View style={styles.pickerWrapper}>
-              <Picker
-                selectedValue={statusFilter}
-                onValueChange={setStatusFilter}
-                style={styles.picker}
-              >
-                <Picker.Item label="상태 전체" value="" />
-                <Picker.Item label="정상" value="정상" />
-                <Picker.Item label="주의" value="주의" />
-                <Picker.Item label="오프라인" value="오프라인" />
-              </Picker>
+            <View style={{ width: scaleSize(120) }}>
+              <DropDownPicker
+                open={statusOpen}
+                value={statusFilter}
+                items={[
+                  { label: '전체', value: '' },
+                  { label: '정상', value: '정상' },
+                  { label: '주의', value: '주의' },
+                  { label: '오프라인', value: '오프라인' },
+                ]}
+                setOpen={setStatusOpen}
+                setValue={setStatusFilter}
+                placeholder="상태 선택"
+                listMode="MODAL"
+                modalProps={{
+                  animationType: "fade",
+                  transparent: true,
+                }}
+                modalContentContainerStyle={{
+                  backgroundColor: 'white',
+                  borderRadius: scaleSize(16),
+                  padding: spacing.md,
+                  maxHeight: '40%',
+                  width: '80%',
+                  alignSelf: 'center',
+                  marginTop: '30%',
+                }}
+                modalTitleStyle={{
+                  fontSize: scaleFontSize(16),
+                  fontWeight: 'bold',
+                  color: colors.text,
+                  marginBottom: spacing.sm,
+                }}
+                modalTitle="상태 선택"
+                style={styles.dropdown}
+                textStyle={styles.dropdownText}
+                placeholderStyle={styles.dropdownPlaceholder}
+                listItemContainerStyle={{ height: scaleSize(50), justifyContent: 'center' }}
+                listItemLabelStyle={{ fontSize: scaleFontSize(14) }}
+              />
             </View>
           </View>
         </View>
 
         {/* 밴드 카드 그리드 */}
-        <View style={styles.bandGrid}>
-          {filteredBands.map(band => renderBandCard(band))}
-        </View>
+        {filteredBands.length > 0 ? (
+          <View style={styles.bandGrid}>
+            {filteredBands.map(band => renderBandCard(band))}
+          </View>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <MaterialCommunityIcons name="watch-variant" size={64} color={colors.textLight} />
+            <Text style={styles.emptyText}>
+              {searchText || statusFilter ? '검색 결과가 없습니다.' : '등록된 밴드가 없습니다.'}
+            </Text>
+          </View>
+        )}
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
@@ -272,43 +366,38 @@ const BandSearchScreen = ({ navigation }) => {
                   <Text style={styles.detailValue}>{selectedBand?.id}</Text>
                 </View>
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>그룹</Text>
-                  <Text style={styles.detailValue}>A동</Text>
+                  <Text style={styles.detailLabel}>사용자명</Text>
+                  <Text style={styles.detailValue}>{selectedBand?.name}</Text>
                 </View>
               </View>
 
               <View style={styles.detailSection}>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>심박수</Text>
-                  <Text style={[styles.detailValue, styles.vitalValue]}>{selectedBand?.hr} BPM</Text>
+                  <Text style={[styles.detailValue, styles.vitalValue]}>
+                    {selectedBand?.hr || '-'} {selectedBand?.hr ? 'BPM' : ''}
+                  </Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>SpO2</Text>
-                  <Text style={[styles.detailValue, styles.vitalValue]}>{selectedBand?.spo2}%</Text>
+                  <Text style={[styles.detailValue, styles.vitalValue]}>
+                    {selectedBand?.spo2 ? `${selectedBand.spo2}%` : '-'}
+                  </Text>
                 </View>
               </View>
 
               <View style={styles.detailSection}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>혈압</Text>
-                  <Text style={[styles.detailValue, styles.vitalValue]}>128/82 mmHg</Text>
-                </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>배터리</Text>
-                  <Text style={[styles.detailValue, styles.vitalValue]}>{selectedBand?.battery}%</Text>
+                  <Text style={[styles.detailValue, styles.vitalValue]}>
+                    {selectedBand?.battery > 0 ? `${selectedBand.battery}%` : '-'}
+                  </Text>
                 </View>
-              </View>
-
-              <View style={styles.detailSection}>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>상태</Text>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedBand?.status) }]}>
                     <Text style={styles.statusText}>{selectedBand?.status}</Text>
                   </View>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>eHG4S</Text>
-                  <Text style={[styles.detailValue, { color: colors.primary, fontWeight: '600' }]}>연결됨</Text>
                 </View>
               </View>
 
@@ -370,7 +459,7 @@ const BandSearchScreen = ({ navigation }) => {
                   <View style={styles.locationInfo}>
                     <Text style={styles.locationInfoText}>위도: {selectedBandLocation?.lat}</Text>
                     <Text style={styles.locationInfoText}>경도: {selectedBandLocation?.lng}</Text>
-                    <Text style={styles.locationInfoText}>마지막 업데이트: 방금 전</Text>
+                    <Text style={styles.locationInfoText}>상태: {selectedBandLocation?.status === 'online' ? '온라인' : '오프라인'}</Text>
                   </View>
                 </>
               ) : (
@@ -403,21 +492,42 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: spacing.md,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: scaleFontSize(14),
+    color: colors.textSecondary,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
   screenTitle: {
     fontSize: scaleFontSize(16),
     fontWeight: 'bold',
     color: colors.text,
-    marginBottom: spacing.md,
+  },
+  countText: {
+    fontSize: scaleFontSize(13),
+    color: colors.textSecondary,
   },
   card: {
     backgroundColor: 'white',
     borderRadius: scaleSize(14),
     padding: spacing.md,
     marginBottom: spacing.lg,
+    overflow: 'visible',
   },
   searchRow: {
     flexDirection: 'row',
     gap: spacing.sm,
+    alignItems: 'flex-start',
   },
   searchInputWrapper: {
     flex: 1,
@@ -436,16 +546,38 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginLeft: spacing.xs,
   },
-  pickerWrapper: {
+  dropdown: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: scaleSize(8),
-    overflow: 'hidden',
     backgroundColor: 'white',
-    minWidth: scaleSize(120),
-  },
-  picker: {
+    width: scaleSize(120),
     height: scaleSize(44),
+    minHeight: scaleSize(44),
+    zIndex: 3000,
+  },
+  dropdownText: {
+    fontSize: scaleFontSize(12),
+    color: colors.text,
+  },
+  dropdownPlaceholder: {
+    fontSize: scaleFontSize(12),
+    color: colors.textSecondary,
+  },
+  dropdownContainer: {
+    borderColor: colors.border,
+    backgroundColor: 'white',
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: scaleSize(80),
+  },
+  emptyText: {
+    marginTop: spacing.md,
+    fontSize: scaleFontSize(14),
+    color: colors.textSecondary,
   },
   bandGrid: {
     flexDirection: 'row',
