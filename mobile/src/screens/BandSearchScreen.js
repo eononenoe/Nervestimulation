@@ -17,9 +17,11 @@ import { WebView } from 'react-native-webview';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
+import BandDetailModal from '../components/BandDetailModal';
 import { colors, shadow } from '../utils/theme';
 import { scaleFontSize, scaleSize, spacing } from '../utils/responsive';
 import { bandAPI } from '../services/api';
+import socketService from '../services/socket';
 
 const BandSearchScreen = ({ navigation }) => {
   const [searchText, setSearchText] = useState('');
@@ -27,7 +29,6 @@ const BandSearchScreen = ({ navigation }) => {
   const [statusOpen, setStatusOpen] = useState(false);
   const [selectedBand, setSelectedBand] = useState(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
-  const [locationModalVisible, setLocationModalVisible] = useState(false);
 
   // API 연동 상태
   const [bands, setBands] = useState([]);
@@ -96,6 +97,89 @@ const BandSearchScreen = ({ navigation }) => {
     fetchBands();
   }, []);
 
+  // Socket.IO 실시간 업데이트
+  useEffect(() => {
+    // 센서 데이터 업데이트 이벤트 리스닝
+    const handleSensorUpdate = (data) => {
+      console.log('[BandSearch] Sensor update received:', data);
+
+      // 해당 밴드 찾아서 상태 업데이트
+      setBands(prevBands => {
+        return prevBands.map(band => {
+          if (band.id === data.bid) {
+            // 밴드 상태 업데이트
+            const updatedBand = {
+              ...band,
+              hr: data.hr || band.hr,
+              spo2: data.spo2 || band.spo2,
+              battery: data.battery_level || band.battery,
+              connect_state: 1, // 데이터가 왔다는 것은 연결됨을 의미
+            };
+            // 상태 재계산
+            updatedBand.status = getStatus(updatedBand);
+            return updatedBand;
+          }
+          return band;
+        });
+      });
+    };
+
+    // 알림 이벤트 리스닝 (밴드 연결 상태 변경 감지)
+    const handleAlertNew = (data) => {
+      console.log('[BandSearch] Alert received:', data);
+
+      // 알림이 온 밴드는 온라인 상태로 업데이트
+      if (data.bid) {
+        setBands(prevBands => {
+          return prevBands.map(band => {
+            if (band.id === data.bid) {
+              const updatedBand = {
+                ...band,
+                connect_state: 1,
+              };
+              updatedBand.status = getStatus(updatedBand);
+              return updatedBand;
+            }
+            return band;
+          });
+        });
+      }
+    };
+
+    // 밴드 상태 변경 이벤트 리스닝 (온라인/오프라인)
+    const handleBandStatus = (data) => {
+      console.log('[BandSearch] Band status changed:', data);
+
+      if (data.bid) {
+        setBands(prevBands => {
+          return prevBands.map(band => {
+            if (band.id === data.bid) {
+              const updatedBand = {
+                ...band,
+                connect_state: data.status === 'offline' ? 0 : 1,
+              };
+              updatedBand.status = getStatus(updatedBand);
+              return updatedBand;
+            }
+            return band;
+          });
+        });
+      }
+    };
+
+    // 이벤트 리스너 등록
+    socketService.on('sensor_update', handleSensorUpdate);
+    socketService.on('alert_new', handleAlertNew);
+    socketService.on('band_status', handleBandStatus);
+
+    // 클린업
+    return () => {
+      socketService.off('sensor_update', handleSensorUpdate);
+      socketService.off('alert_new', handleAlertNew);
+      socketService.off('band_status', handleBandStatus);
+    };
+  }, []);
+
   // 새로고침 핸들러
   const handleRefresh = () => {
     fetchBands(true);
@@ -115,71 +199,6 @@ const BandSearchScreen = ({ navigation }) => {
     const matchStatus = statusFilter === '' || band.status === statusFilter;
     return matchSearch && matchStatus;
   });
-
-  // 선택된 밴드의 위치 정보
-  const selectedBandLocation = selectedBand && selectedBand.latitude && selectedBand.longitude ? {
-    id: selectedBand.id,
-    user: selectedBand.name,
-    lat: selectedBand.latitude,
-    lng: selectedBand.longitude,
-    status: selectedBand.connect_state === 1 ? 'online' : 'offline'
-  } : null;
-
-  // 선택된 밴드의 위치 지도 HTML 생성
-  const locationMapHtml = selectedBandLocation ? `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-      <style>
-        body { margin: 0; padding: 0; }
-        #map { width: 100vw; height: 100vh; }
-      </style>
-    </head>
-    <body>
-      <div id="map"></div>
-      <script>
-        var map = L.map('map').setView([${selectedBandLocation.lat}, ${selectedBandLocation.lng}], 15);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap'
-        }).addTo(map);
-
-        // 온라인/오프라인 마커
-        var greenIcon = L.divIcon({
-          className: 'custom-icon',
-          html: '<div style="background-color:#43E396;width:30px;height:30px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>',
-          iconSize: [30, 30],
-          iconAnchor: [15, 15]
-        });
-
-        var greyIcon = L.divIcon({
-          className: 'custom-icon',
-          html: '<div style="background-color:#9ca3af;width:30px;height:30px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>',
-          iconSize: [30, 30],
-          iconAnchor: [15, 15]
-        });
-
-        // 밴드 데이터
-        var band = {
-          id: '${selectedBandLocation.id}',
-          user: '${selectedBandLocation.user}',
-          lat: ${selectedBandLocation.lat},
-          lng: ${selectedBandLocation.lng},
-          status: '${selectedBandLocation.status}'
-        };
-
-        var icon = band.status === 'online' ? greenIcon : greyIcon;
-        var marker = L.marker([band.lat, band.lng], {icon: icon}).addTo(map);
-
-        marker.bindPopup('<b>' + band.user + '</b><br>' + (band.status === 'online' ? '온라인' : '오프라인'));
-        marker.openPopup();
-      </script>
-    </body>
-    </html>
-  ` : null;
 
   const renderBandCard = (band) => (
     <View key={band.id} style={[styles.bandCard, shadow.small]}>
@@ -213,26 +232,26 @@ const BandSearchScreen = ({ navigation }) => {
         </View>
       </View>
 
-      <View style={styles.bandActions}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => {
-            setSelectedBand(band);
-            setDetailModalVisible(true);
-          }}
-        >
-          <Text style={styles.actionButtonText}>상세보기</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => {
-            setSelectedBand(band);
-            setLocationModalVisible(true);
-          }}
-        >
-          <Text style={styles.actionButtonText}>위치확인</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        style={[styles.bandActionButton, styles.actionButtonPrimary]}
+        onPress={() => {
+          const bandForModal = {
+            id: band.id,
+            band_id: band.id,
+            name: band.name,
+            status: band.connect_state === 1 ? 'online' : 'offline',
+            hr: band.hr,
+            spo2: band.spo2,
+            battery: band.battery,
+            latitude: band.latitude,
+            longitude: band.longitude,
+          };
+          setSelectedBand(bandForModal);
+          setDetailModalVisible(true);
+        }}
+      >
+        <Text style={styles.actionButtonTextPrimary}>상세보기</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -343,142 +362,20 @@ const BandSearchScreen = ({ navigation }) => {
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
 
-      {/* 상세보기 모달 */}
-      <Modal
+      {/* 상세보기 모달 - BandDetailModal 사용 */}
+      <BandDetailModal
         visible={detailModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setDetailModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>사용자 상세 - {selectedBand?.name}</Text>
-              <TouchableOpacity onPress={() => setDetailModalVisible(false)}>
-                <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalContent}>
-              <View style={styles.detailSection}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>밴드 ID</Text>
-                  <Text style={styles.detailValue}>{selectedBand?.id}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>사용자명</Text>
-                  <Text style={styles.detailValue}>{selectedBand?.name}</Text>
-                </View>
-              </View>
-
-              <View style={styles.detailSection}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>심박수</Text>
-                  <Text style={[styles.detailValue, styles.vitalValue]}>
-                    {selectedBand?.hr || '-'} {selectedBand?.hr ? 'BPM' : ''}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>SpO2</Text>
-                  <Text style={[styles.detailValue, styles.vitalValue]}>
-                    {selectedBand?.spo2 ? `${selectedBand.spo2}%` : '-'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.detailSection}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>배터리</Text>
-                  <Text style={[styles.detailValue, styles.vitalValue]}>
-                    {selectedBand?.battery > 0 ? `${selectedBand.battery}%` : '-'}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>상태</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedBand?.status) }]}>
-                    <Text style={styles.statusText}>{selectedBand?.status}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.modalButtonRow}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonPrimary]}
-                  onPress={() => {
-                    setDetailModalVisible(false);
-                    setLocationModalVisible(true);
-                  }}
-                >
-                  <Text style={styles.modalButtonTextPrimary}>위치 확인</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonSecondary]}
-                  onPress={() => {
-                    setDetailModalVisible(false);
-                    navigation.navigate('Dashboard', { screen: 'NerveStim' });
-                  }}
-                >
-                  <Text style={styles.modalButtonText}>자극 세션</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 위치 확인 모달 */}
-      <Modal
-        visible={locationModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setLocationModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>위치 확인 - {selectedBand?.name}</Text>
-              <TouchableOpacity onPress={() => setLocationModalVisible(false)}>
-                <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalContent}>
-              {locationMapHtml ? (
-                <>
-                  <View style={styles.locationMapContainer}>
-                    <WebView
-                      style={styles.locationMap}
-                      originWhitelist={['*']}
-                      source={{ html: locationMapHtml }}
-                      javaScriptEnabled={true}
-                      domStorageEnabled={true}
-                      scrollEnabled={false}
-                    />
-                  </View>
-
-                  <View style={styles.locationInfo}>
-                    <Text style={styles.locationInfoText}>위도: {selectedBandLocation?.lat}</Text>
-                    <Text style={styles.locationInfoText}>경도: {selectedBandLocation?.lng}</Text>
-                    <Text style={styles.locationInfoText}>상태: {selectedBandLocation?.status === 'online' ? '온라인' : '오프라인'}</Text>
-                  </View>
-                </>
-              ) : (
-                <View style={styles.locationPlaceholder}>
-                  <MaterialCommunityIcons name="map-marker-off" size={64} color={colors.textLight} />
-                  <Text style={styles.locationText}>위치 정보 없음</Text>
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setLocationModalVisible(false)}
-              >
-                <Text style={styles.closeButtonText}>닫기</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        band={selectedBand}
+        onClose={() => setDetailModalVisible(false)}
+        navigation={navigation}
+        bandLocations={bands.map(b => ({
+          id: b.id,
+          user: b.name,
+          lat: b.latitude || 36.1194,
+          lng: b.longitude || 128.3446,
+          status: b.connect_state === 1 ? 'online' : 'offline'
+        }))}
+      />
     </SafeAreaView>
   );
 };
@@ -639,6 +536,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
+  bandActionButton: {
+    width: '100%',
+    paddingVertical: scaleSize(10),
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: scaleSize(8),
+    alignItems: 'center',
+  },
   actionButton: {
     flex: 1,
     paddingVertical: scaleSize(8),
@@ -647,10 +552,19 @@ const styles = StyleSheet.create({
     borderRadius: scaleSize(6),
     alignItems: 'center',
   },
+  actionButtonPrimary: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
   actionButtonText: {
     fontSize: scaleFontSize(12),
     fontWeight: '500',
     color: colors.text,
+  },
+  actionButtonTextPrimary: {
+    fontSize: scaleFontSize(12),
+    fontWeight: '600',
+    color: 'white',
   },
   modalOverlay: {
     flex: 1,

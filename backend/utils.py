@@ -129,8 +129,8 @@ def token_required(f):
             return jsonify({'error': 'Token is invalid or expired'}), 401
             
         user = User.query.get(payload['user_id'])
-        
-        if not user or not user.is_active:
+
+        if not user:
             return jsonify({'error': 'User not found'}), 401
             
         g.current_user = user

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../utils/theme';
 import { scaleFontSize, scaleSize, spacing } from '../utils/responsive';
 
@@ -26,10 +27,26 @@ const VitalCard = ({ icon, value, label, status = 'normal' }) => {
     }
   };
 
+  const getIconColor = () => {
+    switch (status) {
+      case 'warning':
+        return colors.warning;
+      case 'danger':
+        return colors.danger;
+      default:
+        return colors.primary;
+    }
+  };
+
   return (
     <View style={[styles.card, getCardStyle()]}>
-      {/* 아이콘 */}
-      <Text style={styles.icon}>{icon}</Text>
+      {/* 아이콘 - SVG Icon */}
+      <MaterialCommunityIcons
+        name={icon}
+        size={scaleSize(24)}
+        color={getIconColor()}
+        style={styles.icon}
+      />
 
       {/* 값 */}
       <Text style={[styles.value, { color: getValueColor() }]}>
@@ -64,7 +81,6 @@ const styles = StyleSheet.create({
     borderColor: '#fecaca',
   },
   icon: {
-    fontSize: scaleFontSize(20),
     marginBottom: spacing.xs,
   },
   value: {

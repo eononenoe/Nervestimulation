@@ -77,13 +77,15 @@ def login():
         user: 사용자 정보
     """
     data = request.get_json()
-    user_id = data.get('user_id')
+    # 'user_id' 또는 'username' 모두 허용
+    user_id = data.get('user_id') or data.get('username')
     password = data.get('password')
-    
+
     if not user_id or not password:
         return jsonify({'error': 'user_id and password required'}), 400
-    
-    user = select.get_user_by_id(user_id)
+
+    # 데이터베이스 스키마는 'username' 컬럼 사용
+    user = User.query.filter_by(username=user_id).first()
     
     if not user:
         return jsonify({'error': 'Invalid credentials'}), 401
@@ -96,23 +98,30 @@ def login():
     payload = {
         'user_id': user.id,
         'user_name': user.name,
-        'level': user.level,
+        'level': user.permission if hasattr(user, 'permission') else 2,
         'exp': datetime.utcnow() + current_app.config['JWT_ACCESS_TOKEN_EXPIRES']
     }
-    
+
     token = jwt.encode(
         payload,
         current_app.config['JWT_SECRET_KEY'],
         algorithm='HS256'
     )
-    
-    # 로그인 이력 저장
-    query.insert_login_history(user.id, request.remote_addr, request.user_agent.string)
-    
+
+    # 사용자 정보 응답
+    user_data = {
+        'id': user.id,
+        'username': user.username,
+        'name': user.name,
+        'email': user.email,
+        'phone': user.phone,
+        'permission': user.permission if hasattr(user, 'permission') else 2
+    }
+
     return jsonify({
         'success': True,
         'token': token,
-        'user': user.to_dict()
+        'user': user_data
     })
 
 
@@ -164,12 +173,27 @@ def get_dashboard_events():
     """대시보드용 최근 이벤트 목록"""
     limit = request.args.get('limit', 20, type=int)
     level = request.args.get('level', None, type=int)
-    
+
     events = select.get_recent_events(limit=limit, event_level=level)
-    
+
+    # 각 이벤트에 밴드 정보 추가
+    result = []
+    for event in events:
+        event_dict = event.to_dict()
+        # relationship backref를 사용하여 밴드 정보 가져오기
+        band = event.band
+        if band:
+            event_dict['bid'] = band.bid
+            event_dict['wearer_name'] = band.wearer_name
+        else:
+            # 밴드를 찾을 수 없는 경우 FK_bid를 bid로 사용
+            event_dict['bid'] = event.FK_bid
+            event_dict['wearer_name'] = f'Band #{event.FK_bid}' if event.FK_bid else 'Unknown'
+        result.append(event_dict)
+
     return jsonify({
         'success': True,
-        'data': [e.to_dict() for e in events]
+        'data': result
     })
 
 
@@ -182,16 +206,37 @@ def get_dashboard_events():
 def get_bands_list():
     """밴드 목록 조회"""
     include_offline = request.args.get('include_offline', 'true').lower() == 'true'
-    
+
     if include_offline:
         bands = select.get_all_bands()
     else:
         bands = select.get_online_bands()
-    
+
+    # 각 밴드에 최신 센서 데이터 추가
+    result = []
+    for band in bands:
+        band_dict = band.to_dict()
+
+        # 최신 센서 데이터 조회
+        latest_sensor = SensorData.query.filter_by(FK_bid=band.id)\
+            .order_by(SensorData.datetime.desc()).first()
+
+        if latest_sensor:
+            band_dict['latest_hr'] = latest_sensor.hr
+            band_dict['latest_spo2'] = latest_sensor.spo2
+            band_dict['battery'] = latest_sensor.battery_level or 0
+            current_app.logger.info(f"Band {band.bid} - HR: {latest_sensor.hr}, SpO2: {latest_sensor.spo2}, Battery: {latest_sensor.battery_level}")
+        else:
+            band_dict['latest_hr'] = 0
+            band_dict['latest_spo2'] = 0
+            band_dict['battery'] = 0
+
+        result.append(band_dict)
+
     return jsonify({
         'success': True,
-        'data': [b.to_dict() for b in bands],
-        'total': len(bands)
+        'data': result,
+        'total': len(result)
     })
 
 

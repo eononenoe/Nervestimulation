@@ -116,8 +116,16 @@ export const authAPI = {
 
 // ========== 대시보드 API ==========
 export const dashboardAPI = {
+  // 대시보드 요약 (통계)
   getDashboard: () =>
     api.get('/dashboard'),
+  // 최근 이벤트/알림 목록
+  getEvents: (limit = 20) =>
+    api.get(`/dashboard/events?limit=${limit}`),
+  // 밴드 상태 요약 (센서 데이터 포함)
+  getBandsStatus: () =>
+    api.get('/dashboard/bands-status'),
+  // 밴드 목록 (레거시)
   getBands: () =>
     api.get('/bands/list'),
   getBandDetail: (id) =>
@@ -138,14 +146,27 @@ export const bandAPI = {
 
 // ========== 신경자극 API ==========
 export const nerveStimAPI = {
+  // 세션 목록 조회
   getSessions: (params) =>
     api.get('/nervestim/sessions', { params }),
-  getSessionDetail: (id) =>
-    api.get(`/nervestim/sessions/${id}`),
-  startSession: (data) =>
+  // 세션 상세 조회
+  getSessionDetail: (sessionId) =>
+    api.get(`/nervestim/sessions/${sessionId}`),
+  // 세션 생성
+  createSession: (data) =>
     api.post('/nervestim/sessions', data),
-  stopSession: (id, data) =>
-    api.patch(`/nervestim/sessions/${id}/stop`, data),
+  // 세션 시작
+  startSession: (sessionId, data) =>
+    api.post(`/nervestim/sessions/${sessionId}/start`, data),
+  // 세션 중지
+  stopSession: (sessionId, data) =>
+    api.post(`/nervestim/sessions/${sessionId}/stop`, data),
+  // 세션 강도 변경
+  changeLevel: (sessionId, level) =>
+    api.put(`/nervestim/sessions/${sessionId}/level`, { level }),
+  // 히스토리 조회
+  getHistory: (params) =>
+    api.get('/nervestim/history', { params }),
 };
 
 // ========== 혈압 API ==========

@@ -61,7 +61,14 @@ def register_handlers(socketio, app):
         join_room('dashboard')
         app.logger.info(f"Client {request.sid} subscribed to dashboard")
         emit('subscribed', {'room': 'dashboard'})
-    
+
+    @socketio.on('subscribe_alerts')
+    def on_subscribe_alerts():
+        """알림 구독 (전체 알림 수신)"""
+        join_room('alerts')
+        app.logger.info(f"Client {request.sid} subscribed to alerts")
+        emit('subscribed', {'room': 'alerts'})
+
     @socketio.on('subscribe_nervestim')
     def on_subscribe_nervestim(data):
         """

@@ -12,6 +12,7 @@ class Config:
     """기본 설정 클래스"""
     # Flask
     SECRET_KEY = os.environ.get('SECRET_KEY', 'wellsafer-secret-key-change-in-production')
+    BIND_PORT = int(os.environ.get('BIND_PORT', 5000))
     
     # SQLAlchemy
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -21,11 +22,11 @@ class Config:
     SQLALCHEMY_POOL_RECYCLE = 3600
     SQLALCHEMY_POOL_PRE_PING = True
     
-    # MQTT
-    MQTT_BROKER_URL = os.environ.get('MQTT_BROKER_URL', 'localhost')
-    MQTT_BROKER_PORT = int(os.environ.get('MQTT_BROKER_PORT', 1883))
-    MQTT_USERNAME = os.environ.get('MQTT_USERNAME', '')
-    MQTT_PASSWORD = os.environ.get('MQTT_PASSWORD', '')
+    # MQTT (원격 브로커)
+    MQTT_BROKER_URL = os.environ.get('MQTT_BROKER_URL', '3.36.149.129')
+    MQTT_BROKER_PORT = int(os.environ.get('MQTT_BROKER_PORT', 18831))
+    MQTT_USERNAME = os.environ.get('MQTT_USERNAME', 'admin_user')
+    MQTT_PASSWORD = os.environ.get('MQTT_PASSWORD', 'Psalms23##cross')
     MQTT_KEEPALIVE = 60
     MQTT_TLS_ENABLED = False
     
@@ -46,16 +47,17 @@ class DevelopmentConfig(Config):
     """개발 환경 설정"""
     DEBUG = True
     TESTING = False
-    
-    # Database (로컬)
+
+    # Database (원격 서버)
+    # 비밀번호의 @ 기호를 %40으로 URL 인코딩
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         'DATABASE_URL',
-        'mysql+pymysql://root:password@localhost:3306/efwb3_dev?charset=utf8mb4'
+        'mysql+pymysql://dbadmin:p%40ssw0rd@3.36.149.129:3306/naas?charset=utf8mb4'
     )
-    
-    # MQTT (로컬)
-    MQTT_BROKER_URL = 'localhost'
-    MQTT_BROKER_PORT = 1883
+
+    # MQTT (원격 브로커)
+    MQTT_BROKER_URL = '3.36.149.129'
+    MQTT_BROKER_PORT = 18831
 
 
 class ProductionConfig(Config):

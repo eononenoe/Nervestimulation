@@ -211,9 +211,9 @@ _threads = []
 def start_threads(app, socketio):
     """모든 백그라운드 스레드 시작"""
     global _threads
-    
-    # 연결 상태 확인 (60초마다)
-    connection_checker = ConnectionChecker(app, socketio, interval=60)
+
+    # 연결 상태 확인 (30초마다)
+    connection_checker = ConnectionChecker(app, socketio, interval=30)
     connection_checker.start()
     _threads.append(connection_checker)
     

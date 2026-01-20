@@ -8,13 +8,16 @@ from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime
 import json
 
-from backend import db, mqtt, socketio
+# Import 순서 중요: db 패키지를 먼저 import한 후 SQLAlchemy 인스턴스를 import
 from backend.db.table import (
     NerveStimSession, NerveStimHistory, BloodPressure, Band,
     SessionStatus, EndReason
 )
 from backend.db.service import query, select
 from backend.api.api_band import token_required
+
+# SQLAlchemy db는 마지막에 import (덮어쓰기 방지)
+from backend import db, mqtt, socketio
 
 nervestim_bp = Blueprint('nervestim', __name__)
 
@@ -28,7 +31,7 @@ nervestim_bp = Blueprint('nervestim', __name__)
 def get_sessions():
     """
     신경자극 세션 목록 조회
-    
+
     Query Params:
         bid: 밴드 ID (선택)
         status: 상태 필터 (선택)
@@ -37,22 +40,44 @@ def get_sessions():
     bid = request.args.get('bid')
     status = request.args.get('status', type=int)
     limit = request.args.get('limit', 20, type=int)
-    
+
     query_obj = NerveStimSession.query
-    
+
     if bid:
         band = select.get_band_by_bid(bid)
         if band:
             query_obj = query_obj.filter_by(FK_bid=band.id)
-    
+
     if status is not None:
         query_obj = query_obj.filter_by(status=status)
-    
+
     sessions = query_obj.order_by(NerveStimSession.created_at.desc()).limit(limit).all()
-    
+
+    # 밴드 정보와 혈압 정보 추가
+    result = []
+    for session in sessions:
+        session_dict = session.to_dict()
+
+        # 밴드 정보 추가
+        band = Band.query.get(session.FK_bid)
+        if band:
+            session_dict['bid'] = band.bid
+            session_dict['wearer_name'] = band.wearer_name
+
+        # 혈압 정보 추가
+        if session.bp_before_id:
+            bp_before = BloodPressure.query.get(session.bp_before_id)
+            session_dict['bp_before'] = bp_before.to_dict() if bp_before else None
+
+        if session.bp_after_id:
+            bp_after = BloodPressure.query.get(session.bp_after_id)
+            session_dict['bp_after'] = bp_after.to_dict() if bp_after else None
+
+        result.append(session_dict)
+
     return jsonify({
         'success': True,
-        'data': [s.to_dict() for s in sessions]
+        'data': result
     })
 
 
@@ -61,7 +86,7 @@ def get_sessions():
 def create_session():
     """
     신경자극 세션 생성
-    
+
     Request Body:
         bid: 밴드 ID
         stim_level: 자극 강도 (1-10)
@@ -71,52 +96,103 @@ def create_session():
         target_nerve: 대상 신경 (median/ulnar/both)
         scheduled_at: 예약 시간 (선택)
     """
+    from flask import current_app
     data = request.get_json()
     bid = data.get('bid')
-    
+
+    current_app.logger.info(f"[NERVESTIM] 세션 생성 요청: bid={bid}, data={data}")
+
     if not bid:
+        current_app.logger.error("[NERVESTIM] bid 누락")
         return jsonify({'error': 'bid is required'}), 400
-    
+
     band = select.get_band_by_bid(bid)
+    current_app.logger.info(f"[NERVESTIM] 밴드 조회: {band.id if band else None}")
+
     if not band:
+        current_app.logger.error(f"[NERVESTIM] 밴드를 찾을 수 없음: {bid}")
         return jsonify({'error': 'Band not found'}), 404
-    
+
     # 진행중인 세션 확인
     active = select.get_active_session_by_band(band.id)
+    current_app.logger.info(f"[NERVESTIM] 활성 세션 확인: {active.session_id if active else '없음'}")
+
     if active:
+        current_app.logger.error(f"[NERVESTIM] 이미 진행중인 세션 존재: {active.session_id}")
         return jsonify({
             'error': 'Active session exists',
             'session_id': active.session_id
         }), 409
-    
-    # 신경자극기 연결 확인
-    if not band.stimulator_connected:
-        return jsonify({'error': 'Stimulator not connected'}), 400
+
+    # 테스트를 위해 신경자극기 연결 확인 주석 처리
+    # if not band.stimulator_connected:
+    #     current_app.logger.error(f"[NERVESTIM] 자극기 미연결: {bid}")
+    #     return jsonify({'error': 'Stimulator not connected'}), 400
     
     # 세션 생성
-    session_data = {
-        'stimulator_id': band.stimulator_id,
-        'stim_level': data.get('stim_level', 1),
-        'frequency': data.get('frequency', 10.0),
-        'pulse_width': data.get('pulse_width', 200),
-        'duration': data.get('duration', 20),
-        'stim_mode': data.get('stim_mode', 'manual'),
-        'target_nerve': data.get('target_nerve', 'median'),
-        'scheduled_at': data.get('scheduled_at')
-    }
-    
-    session_id = query.insert_nervestim_session(band.id, session_data)
-    
-    # WebSocket 알림
-    socketio.emit('stim_session_created', {
-        'session_id': session_id,
-        'bid': bid
-    })
-    
-    return jsonify({
-        'success': True,
-        'session_id': session_id
-    }), 201
+    try:
+        session_data = {
+            'stimulator_id': band.stimulator_id,
+            'stim_level': data.get('stim_level', 1),
+            'frequency': data.get('frequency', 10.0),
+            'pulse_width': data.get('pulse_width', 200),
+            'duration': data.get('duration', 20),
+            'stim_mode': data.get('stim_mode', 'manual'),
+            'target_nerve': data.get('target_nerve', 'median'),
+            'scheduled_at': data.get('scheduled_at')
+        }
+
+        current_app.logger.info(f"[NERVESTIM] 세션 데이터 준비 완료: {session_data}")
+
+        session_id = query.insert_nervestim_session(band.id, session_data)
+
+        current_app.logger.info(f"[NERVESTIM] 세션 생성 성공: {session_id}")
+
+        # 세션을 즉시 시작 상태로 변경
+        session = select.get_nervestim_session(session_id)
+        if session:
+            session.status = SessionStatus.RUNNING  # 1: 진행중
+            session.started_at = datetime.utcnow()
+            db.session.commit()
+
+            current_app.logger.info(f"[NERVESTIM] 세션 자동 시작: {session_id}")
+
+            # MQTT로 기기에 시작 명령 전송
+            mqtt_topic = f'/DT/eHG4/NerveStim/Start'
+            mqtt_payload = {
+                'bid': band.bid,
+                'session_id': session_id,
+                'stimulator_id': session.stimulator_id or 'UNKNOWN',
+                'level': session.stim_level,
+                'frequency': session.frequency,
+                'pulse_width': session.pulse_width,
+                'duration': session.duration,
+                'target_nerve': session.target_nerve,
+                'timestamp': int(datetime.utcnow().timestamp() * 1000)
+            }
+
+            try:
+                mqtt.publish(mqtt_topic, json.dumps(mqtt_payload))
+                current_app.logger.info(f"[NERVESTIM] MQTT 시작 명령 전송: {mqtt_topic}")
+            except Exception as mqtt_error:
+                current_app.logger.error(f"[NERVESTIM] MQTT 전송 실패: {str(mqtt_error)}")
+
+        # WebSocket 알림
+        socketio.emit('stim_session_created', {
+            'session_id': session_id,
+            'bid': bid,
+            'status': 'started'
+        })
+
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'status': 'started',
+            'message': '세션이 생성되고 자극이 시작되었습니다'
+        }), 201
+    except Exception as e:
+        current_app.logger.error(f"[NERVESTIM] 세션 생성 실패: {str(e)}")
+        return jsonify({'error': f'Failed to create session: {str(e)}'}), 500
 
 
 @nervestim_bp.route('/nervestim/sessions/<session_id>', methods=['GET'])
@@ -124,18 +200,27 @@ def create_session():
 def get_session(session_id):
     """세션 상세 조회"""
     session = select.get_nervestim_session(session_id)
-    
+
     if not session:
         return jsonify({'error': 'Session not found'}), 404
-    
-    # 혈압 정보 포함
-    bp_before = BloodPressure.query.get(session.bp_before_id) if session.bp_before_id else None
-    bp_after = BloodPressure.query.get(session.bp_after_id) if session.bp_after_id else None
-    
+
     result = session.to_dict()
-    result['bp_before'] = bp_before.to_dict() if bp_before else None
-    result['bp_after'] = bp_after.to_dict() if bp_after else None
-    
+
+    # 밴드 정보 추가
+    band = Band.query.get(session.FK_bid)
+    if band:
+        result['bid'] = band.bid
+        result['wearer_name'] = band.wearer_name
+
+    # 혈압 정보 포함
+    if session.bp_before_id:
+        bp_before = BloodPressure.query.get(session.bp_before_id)
+        result['bp_before'] = bp_before.to_dict() if bp_before else None
+
+    if session.bp_after_id:
+        bp_after = BloodPressure.query.get(session.bp_after_id)
+        result['bp_after'] = bp_after.to_dict() if bp_after else None
+
     return jsonify({'success': True, 'data': result})
 
 

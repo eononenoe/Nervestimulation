@@ -8,20 +8,20 @@ from .database import DBManager, db_manager
 from . import table
 from .service import query, select
 
-# 새로운 SQLAlchemy 모델
-from .models import (
-    db,
-    User,
-    Group,
-    Band,
-    UsersBands,
-    SensorData,
-    Event,
-    NervestimulationStatus,
-    NervestimulationHist,
-    BloodPressure,
-    PrescriptionHist
-)
+# 새로운 SQLAlchemy 모델 - 주석 처리 (table 패키지 사용)
+# from .models import (
+#     db,
+#     User,
+#     Group,
+#     Band,
+#     UsersBands,
+#     SensorData,
+#     Event,
+#     NervestimulationStatus,
+#     NervestimulationHist,
+#     BloodPressure,
+#     PrescriptionHist
+# )
 
 __all__ = [
     # Legacy
@@ -30,16 +30,4 @@ __all__ = [
     'table',
     'query',
     'select',
-    # New models
-    'db',
-    'User',
-    'Group',
-    'Band',
-    'UsersBands',
-    'SensorData',
-    'Event',
-    'NervestimulationStatus',
-    'NervestimulationHist',
-    'BloodPressure',
-    'PrescriptionHist'
 ]

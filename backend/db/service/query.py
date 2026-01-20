@@ -4,11 +4,12 @@
 """
 
 from datetime import datetime
-from backend import db
+# Import 순서 중요: db 패키지를 먼저 import한 후 SQLAlchemy 인스턴스를 import
 from backend.db.table import (
-    User, Band, SensorData, Event, 
+    User, Band, SensorData, Event,
     NerveStimSession, NerveStimHistory, BloodPressure
 )
+from backend import db
 
 
 # ============================================================

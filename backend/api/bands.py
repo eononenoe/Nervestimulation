@@ -4,7 +4,7 @@
 스마트밴드 정보 조회, 관리
 """
 
-from flask import Blueprint, jsonify, request, g
+from flask import Blueprint, jsonify, request, g, current_app
 from datetime import datetime, timedelta
 from sqlalchemy import func, desc
 from backend.db.models import db, Band, SensorData, Event, NervestimulationStatus
@@ -33,16 +33,24 @@ def get_band_list():
     
     result = []
     for band in bands:
-        band_dict = band.to_dict()
-        
         # 최신 센서 데이터
         latest_sensor = SensorData.query.filter_by(FK_bid=band.id)\
             .order_by(SensorData.datetime.desc()).first()
+
+        band_dict = band.to_dict()
+
         if latest_sensor:
             band_dict['latest_hr'] = latest_sensor.hr
             band_dict['latest_spo2'] = latest_sensor.spo2
+            band_dict['battery'] = latest_sensor.battery_level or 0
             band_dict['last_data_at'] = latest_sensor.datetime.isoformat()
-        
+            current_app.logger.info(f"Band {band.bid} - Found sensor data: hr={latest_sensor.hr}, spo2={latest_sensor.spo2}, battery={latest_sensor.battery_level}")
+        else:
+            band_dict['latest_hr'] = 0
+            band_dict['latest_spo2'] = 0
+            band_dict['battery'] = 0
+            current_app.logger.info(f"Band {band.bid} (id={band.id}) - No sensor data found")
+
         result.append(band_dict)
     
     return success_response(result)

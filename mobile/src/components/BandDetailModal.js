@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,16 +7,75 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import VitalCard from './VitalCard';
 import { colors, shadow } from '../utils/theme';
 import { scaleFontSize, scaleSize, spacing } from '../utils/responsive';
+import { bandAPI } from '../services/api';
+import socketService from '../services/socket';
 
 const { height } = Dimensions.get('window');
 
 const BandDetailModal = ({ visible, band, onClose, navigation, bandLocations }) => {
+  const [bandDetail, setBandDetail] = useState(null);
+  const [sensorData, setSensorData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // 밴드 상세 정보 로드
+  useEffect(() => {
+    if (visible && band && (band.id || band.band_id)) {
+      loadBandDetail();
+    }
+  }, [visible, band]);
+
+  const loadBandDetail = async () => {
+    try {
+      setLoading(true);
+      const bid = band.id || band.band_id;
+      const response = await bandAPI.getDetail(bid);
+
+      if (response.data && response.data.success) {
+        const data = response.data.data;
+        setBandDetail(data.band);
+        setSensorData(data.latest_sensor);
+        console.log('Band detail loaded:', data);
+      }
+    } catch (error) {
+      console.error('Failed to load band detail:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Socket.IO 실시간 센서 데이터 업데이트
+  useEffect(() => {
+    if (!visible || !band) return;
+
+    const handleSensorUpdate = (data) => {
+      const bid = band.id || band.band_id;
+      if (data.bid === bid) {
+        console.log('[BandDetail] Sensor update:', data);
+        setSensorData({
+          ...sensorData,
+          hr: data.hr,
+          spo2: data.spo2,
+          skin_temp: data.skin_temp,
+          steps: data.steps,
+          battery_level: data.battery_level,
+        });
+      }
+    };
+
+    socketService.on('sensor_update', handleSensorUpdate);
+
+    return () => {
+      socketService.off('sensor_update', handleSensorUpdate);
+    };
+  }, [visible, band]);
+
   if (!band) return null;
 
   const handleNerveStim = () => {
@@ -130,59 +189,66 @@ const BandDetailModal = ({ visible, band, onClose, navigation, bandLocations }) 
             style={styles.body}
             showsVerticalScrollIndicator={false}
           >
-            {/* 실시간 생체신호 */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>실시간 생체신호</Text>
-              <View style={styles.vitalsGrid}>
-                <View style={styles.vitalCardWrapper}>
-                  <VitalCard
-                    icon="❤️"
-                    value={band.hr || '-'}
-                    label="심박수"
-                    status={band.hrClass}
-                  />
-                </View>
-                <View style={styles.vitalCardWrapper}>
-                  <VitalCard
-                    icon="🫁"
-                    value={band.spo2 || '-'}
-                    label="SpO2"
-                    status={band.spo2Class}
-                  />
-                </View>
-                <View style={styles.vitalCardWrapper}>
-                  <VitalCard
-                    icon="🩺"
-                    value={band.bp || '-'}
-                    label="혈압"
-                    status={band.bpClass}
-                  />
-                </View>
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.loadingText}>데이터 로딩 중...</Text>
               </View>
-            </View>
+            ) : (
+              <>
+                {/* 실시간 생체신호 */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>실시간 생체신호</Text>
+                  <View style={styles.vitalsGrid}>
+                    <View style={styles.vitalCardWrapper}>
+                      <VitalCard
+                        icon="heart-pulse"
+                        value={sensorData?.hr || band.hr || '-'}
+                        label="심박수"
+                        status={sensorData?.hr ? (sensorData.hr < 60 || sensorData.hr > 100 ? 'warning' : 'normal') : 'normal'}
+                      />
+                    </View>
+                    <View style={styles.vitalCardWrapper}>
+                      <VitalCard
+                        icon="water-percent"
+                        value={sensorData?.spo2 ? `${sensorData.spo2}%` : band.spo2 || '-'}
+                        label="SpO2"
+                        status={sensorData?.spo2 ? (sensorData.spo2 < 95 ? 'warning' : 'normal') : 'normal'}
+                      />
+                    </View>
+                    <View style={styles.vitalCardWrapper}>
+                      <VitalCard
+                        icon="thermometer"
+                        value={sensorData?.skin_temp ? `${sensorData.skin_temp.toFixed(1)}°C` : '-'}
+                        label="체온"
+                        status="normal"
+                      />
+                    </View>
+                  </View>
+                </View>
 
-            {/* 기기 상태 */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>기기 상태</Text>
-              <View style={styles.infoGrid}>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>배터리</Text>
-                  <Text style={styles.infoValue}>{band.battery || 85}%</Text>
+                {/* 기기 상태 */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>기기 상태</Text>
+                  <View style={styles.infoGrid}>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>배터리</Text>
+                      <Text style={styles.infoValue}>{sensorData?.battery_level || bandDetail?.battery || band.battery || '-'}%</Text>
+                    </View>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>걸음 수</Text>
+                      <Text style={styles.infoValue}>{sensorData?.steps || '-'}</Text>
+                    </View>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>신호 강도</Text>
+                      <Text style={styles.infoValue}>{bandDetail?.signal_strength || '-'}</Text>
+                    </View>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>펌웨어</Text>
+                      <Text style={styles.infoValue}>{bandDetail?.firmware_version || '-'}</Text>
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>신호 강도</Text>
-                  <Text style={styles.infoValue}>{band.signal || '-65 dBm'}</Text>
-                </View>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>펌웨어</Text>
-                  <Text style={styles.infoValue}>{band.firmware || 'v2.1.4'}</Text>
-                </View>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>마지막 동기화</Text>
-                  <Text style={styles.infoValue}>방금 전</Text>
-                </View>
-              </View>
-            </View>
 
             {/* 위치 정보 */}
             {locationMapHtml && (
@@ -201,15 +267,17 @@ const BandDetailModal = ({ visible, band, onClose, navigation, bandLocations }) 
               </View>
             )}
 
-            {/* 액션 버튼 */}
-            <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.btnPrimary} onPress={handleNerveStim}>
-                <Text style={styles.btnPrimaryText}>신경자극 시작</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnOutline} onPress={handleReport}>
-                <Text style={styles.btnOutlineText}>리포트 생성</Text>
-              </TouchableOpacity>
-            </View>
+                {/* 액션 버튼 */}
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity style={styles.btnPrimary} onPress={handleNerveStim}>
+                    <Text style={styles.btnPrimaryText}>신경자극 시작</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.btnOutline} onPress={handleReport}>
+                    <Text style={styles.btnOutlineText}>리포트 생성</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </ScrollView>
         </TouchableOpacity>
       </TouchableOpacity>
@@ -354,6 +422,16 @@ const styles = StyleSheet.create({
   locationMap: {
     width: '100%',
     height: '100%',
+  },
+  loadingContainer: {
+    padding: spacing.xxl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: scaleFontSize(14),
+    color: colors.textSecondary,
   },
 });
 

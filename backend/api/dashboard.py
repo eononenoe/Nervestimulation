@@ -91,17 +91,22 @@ def get_dashboard_events():
     limit = min(100, max(1, limit))
     
     events = Event.query.order_by(Event.datetime.desc()).limit(limit).all()
-    
+
     # 밴드 정보 조인
     result = []
     for event in events:
         event_dict = event.to_dict()
-        band = Band.query.get(event.FK_bid)
+        # relationship backref를 사용하여 밴드 정보 가져오기
+        band = event.band
         if band:
             event_dict['bid'] = band.bid
             event_dict['wearer_name'] = band.wearer_name
+        else:
+            # 밴드를 찾을 수 없는 경우 FK_bid를 bid로 사용
+            event_dict['bid'] = event.FK_bid
+            event_dict['wearer_name'] = f'Band #{event.FK_bid}' if event.FK_bid else 'Unknown'
         result.append(event_dict)
-    
+
     return success_response(result)
 
 

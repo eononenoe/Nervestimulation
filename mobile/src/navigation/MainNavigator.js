@@ -7,6 +7,7 @@ import NerveStimScreen from '../screens/NerveStimScreen';
 import BloodPressureScreen from '../screens/BloodPressureScreen';
 import DeviceScreen from '../screens/DeviceScreen';
 import ReportScreen from '../screens/ReportScreen';
+import AlertHistoryScreen from '../screens/AlertHistoryScreen';
 import BandSearchScreen from '../screens/BandSearchScreen';
 import UserManageScreen from '../screens/UserManageScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -21,6 +22,7 @@ const DashboardStack = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="DashboardMain" component={DashboardScreen} />
+      <Stack.Screen name="AlertHistory" component={AlertHistoryScreen} />
       <Stack.Screen name="NerveStim" component={NerveStimScreen} />
       <Stack.Screen name="BloodPressure" component={BloodPressureScreen} />
       <Stack.Screen name="Device" component={DeviceScreen} />

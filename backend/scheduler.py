@@ -92,11 +92,11 @@ class Scheduler:
 def check_offline_bands():
     """
     오프라인 밴드 감지
-    5분 이상 데이터가 없는 밴드를 오프라인으로 처리
+    1분 이상 데이터가 없는 밴드를 오프라인으로 처리
     """
     from backend.db.models import db, Band, Event
-    
-    threshold = datetime.utcnow() - timedelta(minutes=5)
+
+    threshold = datetime.utcnow() - timedelta(minutes=1)
     
     # 온라인 상태지만 데이터가 오래된 밴드
     bands = Band.query.filter(

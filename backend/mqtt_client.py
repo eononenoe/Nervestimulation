@@ -10,6 +10,9 @@ from datetime import datetime
 from flask import current_app
 import paho.mqtt.client as mqtt
 
+# backend 모듈 import (db 디렉토리와 구분하기 위해)
+import backend as backend_module
+
 # MQTT 클라이언트 인스턴스
 _mqtt_client = None
 _mqtt_lock = threading.Lock()
@@ -248,9 +251,13 @@ def _register_default_handlers(app, socketio):
 
 def _process_sensor_data(app, socketio, bid, payload):
     """센서 데이터 처리 및 저장"""
-    from backend.db.models import db, Band, SensorData
-    
+    from flask_sqlalchemy import SQLAlchemy
+    from backend.db import models as db_models
+    Band = db_models.Band
+    SensorData = db_models.SensorData
+
     with app.app_context():
+        db = app.extensions['sqlalchemy']
         band = Band.query.filter_by(bid=bid).first()
         if not band:
             return
@@ -275,9 +282,17 @@ def _process_sensor_data(app, socketio, bid, payload):
         db.session.add(sensor)
 
         # 밴드 연결 상태 업데이트
-        band.connect_state = 1
+        # scdState (Skin Contact Detection): 0=벗음, 1=착용
+        scd_state = payload.get('scdState')
+        if scd_state == 0:
+            # 밴드를 벗으면 즉시 오프라인
+            band.connect_state = 0
+            app.logger.info(f"Band {bid} removed (scdState=0), setting offline")
+        else:
+            # 착용 중이면 온라인
+            band.connect_state = 1
         band.connect_time = datetime.utcnow()
-        
+
         db.session.commit()
         
         # Socket.IO로 실시간 전송
@@ -294,9 +309,11 @@ def _process_sensor_data(app, socketio, bid, payload):
 
 def _process_location_data(app, socketio, bid, payload):
     """위치 데이터 처리"""
-    from backend.db.models import db, Band
-    
+    from backend.db import models as db_models
+    Band = db_models.Band
+
     with app.app_context():
+        db = app.extensions['sqlalchemy']
         band = Band.query.filter_by(bid=bid).first()
         if not band:
             return
@@ -320,7 +337,9 @@ def _process_location_data(app, socketio, bid, payload):
 
 def _process_band_status(app, socketio, bid, payload):
     """밴드 상태 처리"""
-    from backend.db.models import db, Band
+    db = backend_module.db
+    from backend.db import models as db_models
+    Band = db_models.Band
     
     with app.app_context():
         band = Band.query.filter_by(bid=bid).first()
@@ -344,9 +363,12 @@ def _process_band_status(app, socketio, bid, payload):
 
 def _process_band_event(app, socketio, bid, payload):
     """밴드 이벤트 처리"""
-    from backend.db.models import db, Band, Event
+    from backend.db import models as db_models
+    Band = db_models.Band
+    Event = db_models.Event
 
     with app.app_context():
+        db = app.extensions['sqlalchemy']
         band = Band.query.filter_by(bid=bid).first()
         if not band:
             return
@@ -389,9 +411,11 @@ def _process_band_event(app, socketio, bid, payload):
 
 def _process_stim_status(app, socketio, bid, payload):
     """신경자극기 상태 처리"""
-    from backend.db.models import db, NervestimulationStatus
-    
+    from backend.db import models as db_models
+    NervestimulationStatus = db_models.NervestimulationStatus
+
     with app.app_context():
+        db = app.extensions['sqlalchemy']
         session_id = payload.get('session_id')
         if not session_id:
             return
@@ -416,7 +440,9 @@ def _process_stim_status(app, socketio, bid, payload):
 
 def _process_stim_connected(app, socketio, bid, payload):
     """신경자극기 BLE 연결 처리"""
-    from backend.db.models import db, Band
+    db = backend_module.db
+    from backend.db import models as db_models
+    Band = db_models.Band
     
     with app.app_context():
         band = Band.query.filter_by(bid=bid).first()
@@ -437,7 +463,9 @@ def _process_stim_connected(app, socketio, bid, payload):
 
 def _process_stim_disconnected(app, socketio, bid, payload):
     """신경자극기 BLE 연결 해제 처리"""
-    from backend.db.models import db, Band
+    db = backend_module.db
+    from backend.db import models as db_models
+    Band = db_models.Band
     
     with app.app_context():
         band = Band.query.filter_by(bid=bid).first()
@@ -456,7 +484,9 @@ def _process_stim_disconnected(app, socketio, bid, payload):
 
 def _check_vital_anomaly(app, socketio, band, payload):
     """생체신호 이상치 감지"""
-    from backend.db.models import db, Event
+    from backend.db import models as db_models
+    Event = db_models.Event
+    db = app.extensions['sqlalchemy']
 
     hr = payload.get('hr')
     spo2 = payload.get('spo2')
@@ -534,8 +564,8 @@ def _send_emergency_sms(app, band, event):
         
         event.sms_sent = True
         event.sms_sent_at = datetime.utcnow()
-        
-        from backend.db.models import db
+
+        db = app.extensions['sqlalchemy']
         db.session.commit()
         
     except Exception as e:
@@ -631,9 +661,12 @@ def _process_legacy_message(app, socketio, payload, is_sync=False):
 
     {"extAddress": {"low": 1855883348, "high": 108776}, "type": 6, "value": 1, "bandData": {...}}
     """
-    from backend.db.models import db, Band, Event
+    from backend.db import models as db_models
+    Band = db_models.Band
+    Event = db_models.Event
 
     with app.app_context():
+        db = app.extensions['sqlalchemy']
         try:
             # extAddress를 bid로 변환
             ext_addr = payload.get('extAddress', {})
@@ -644,7 +677,11 @@ def _process_legacy_message(app, socketio, payload, is_sync=False):
             bid_int = (high << 32) | low
             bid = str(bid_int)
 
-            app.logger.info(f"Legacy MQTT message - bid: {bid}, type: {payload.get('type')}, sync: {is_sync}")
+            has_band_data = 'bandData' in payload
+            app.logger.info(f"Legacy MQTT message - bid: {bid}, type: {payload.get('type')}, sync: {is_sync}, has_bandData: {has_band_data}")
+            if has_band_data:
+                band_data = payload['bandData']
+                app.logger.info(f"  bandData: hr={band_data.get('hr')}, spo2={band_data.get('spo2')}, battery={band_data.get('battery_level')}")
 
             # 밴드 찾기
             band = Band.query.filter_by(bid=bid).first()
@@ -654,6 +691,13 @@ def _process_legacy_message(app, socketio, payload, is_sync=False):
 
             msg_type = payload.get('type')
             value = payload.get('value')
+
+            # MQTT 메시지를 받았으므로 밴드가 온라인 상태로 업데이트
+            app.logger.info(f"Setting connect_state=1 for band {bid} (before: {band.connect_state})")
+            band.connect_state = 1
+            band.connect_time = datetime.utcnow()
+            db.session.commit()
+            app.logger.info(f"Committed connect_state for band {bid}")
 
             # bandData가 있으면 센서 데이터로 처리
             if 'bandData' in payload:
@@ -716,7 +760,9 @@ def _process_legacy_message(app, socketio, payload, is_sync=False):
                     _send_emergency_sms(app, band, event)
 
         except Exception as e:
+            import traceback
             app.logger.error(f"Legacy message processing error: {e}")
+            app.logger.error(traceback.format_exc())
 
 
 def disconnect_mqtt():

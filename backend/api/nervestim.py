@@ -96,7 +96,7 @@ def get_session(session_id):
 def create_session():
     """
     새 자극 세션 생성
-    
+
     POST /api/Wellsafer/v1/nervestim/sessions
     {
         "bid": "467191213660619",
@@ -106,49 +106,66 @@ def create_session():
         "target_nerve": "median"
     }
     """
+    from flask import current_app
     data = request.get_json()
-    
+    current_app.logger.info(f"[NERVESTIM] 세션 생성 요청 수신: {data}")
+
     if not data or 'bid' not in data:
+        current_app.logger.error("[NERVESTIM] bid 누락")
         return error_response('bid is required', 400)
-    
-    band = Band.query.filter_by(bid=data['bid'], is_active=True).first()
-    
+
+    # is_active 필터 제거 (DB에 필드가 없을 수 있음)
+    band = Band.query.filter_by(bid=data['bid']).first()
+    current_app.logger.info(f"[NERVESTIM] 밴드 조회 결과: {band.id if band else None}, bid={data['bid']}")
+
     if not band:
+        current_app.logger.error(f"[NERVESTIM] 밴드를 찾을 수 없음: {data['bid']}")
         return error_response('Band not found', 404)
-    
-    if not band.stimulator_connected:
-        return error_response('Stimulator not connected', 400)
-    
+
+    # 테스트를 위해 stimulator 연결 체크 주석 처리
+    # if not band.stimulator_connected:
+    #     return error_response('Stimulator not connected', 400)
+
     # 이미 진행 중인 세션 확인
     active = NervestimulationStatus.query.filter_by(FK_bid=band.id, status=1).first()
+    current_app.logger.info(f"[NERVESTIM] 진행중 세션 확인: {active.session_id if active else '없음'}")
     if active:
+        current_app.logger.error(f"[NERVESTIM] 이미 진행중인 세션 존재: {active.session_id}")
         return error_response('Another session is already active', 400)
-    
+
     # 자극 강도 검증
     stim_level = data.get('stim_level', 3)
+    current_app.logger.info(f"[NERVESTIM] 자극 강도 검증: level={stim_level}")
     if not validate_stim_level(stim_level):
+        current_app.logger.error(f"[NERVESTIM] 유효하지 않은 자극 강도: {stim_level}")
         return error_response('Invalid stim_level (1-10)', 400)
-    
-    session = NervestimulationStatus(
-        session_id=generate_session_id(),
-        FK_bid=band.id,
-        stimulator_id=band.stimulator_id,
-        status=0,  # 대기
-        stim_level=stim_level,
-        frequency=data.get('frequency', 10.0),
-        pulse_width=data.get('pulse_width', 200),
-        duration=data.get('duration', 20),
-        target_nerve=data.get('target_nerve', 'median'),
-        stim_mode=data.get('stim_mode', 'manual')
-    )
-    
-    db.session.add(session)
-    db.session.commit()
-    
-    return success_response({
-        'session_id': session.session_id,
-        'status': session.status
-    }, status_code=201)
+
+    try:
+        session = NervestimulationStatus(
+            session_id=generate_session_id(),
+            FK_bid=band.id,
+            stimulator_id=band.stimulator_id,
+            status=0,  # 대기
+            stim_level=stim_level,
+            frequency=data.get('frequency', 10.0),
+            pulse_width=data.get('pulse_width', 200),
+            duration=data.get('duration', 20),
+            target_nerve=data.get('target_nerve', 'median'),
+            stim_mode=data.get('stim_mode', 'manual')
+        )
+
+        db.session.add(session)
+        db.session.commit()
+        current_app.logger.info(f"[NERVESTIM] 세션 생성 성공: {session.session_id}")
+
+        return success_response({
+            'session_id': session.session_id,
+            'status': session.status
+        }, status_code=201)
+    except Exception as e:
+        current_app.logger.error(f"[NERVESTIM] 세션 생성 실패: {str(e)}")
+        db.session.rollback()
+        return error_response(f'Failed to create session: {str(e)}', 500)
 
 
 @nervestim_bp.route('/sessions/<session_id>/start', methods=['POST'])

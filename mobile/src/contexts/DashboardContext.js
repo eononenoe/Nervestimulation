@@ -12,28 +12,10 @@ export const useDashboard = () => {
 };
 
 export const DashboardProvider = ({ children }) => {
-  // Mock 데이터
-  const getMockData = () => ({
-    alerts: [
-      { id: 1, userName: '김영희', message: '혈압 상승 - 152/98 mmHg', level: 'danger' },
-      { id: 2, userName: '박철수', message: '심박수 이상 - 108 BPM', level: 'warning' },
-      { id: 3, userName: '이민수', message: 'SpO2 저하 - 94%', level: 'warning' },
-    ],
-    bands: [
-      { id: 1, name: '김영희', band_id: 'WS-2024-0001', status: 'online', hr: 72, spo2: '98%', bp: '152/98', bpClass: 'danger' },
-      { id: 2, name: '박철수', band_id: 'WS-2024-0002', status: 'online', hr: 108, spo2: '97%', bp: '128/82', hrClass: 'warning' },
-      { id: 3, name: '이민수', band_id: 'WS-2024-0003', status: 'online', hr: 85, spo2: '94%', bp: '118/76', spo2Class: 'warning' },
-      { id: 4, name: '최지원', band_id: 'WS-2024-0004', status: 'offline', hr: '-', spo2: '-', bp: '-' },
-    ]
-  });
-
-  const mockData = getMockData();
-
-  const [alerts, setAlerts] = useState(mockData.alerts);
+  const [alerts, setAlerts] = useState([]);
   const [events, setEvents] = useState([]);
-  const [weeklyStats, setWeeklyStats] = useState([]);
-  const [bandLocations, setBandLocations] = useState([]);
-  const [bands, setBands] = useState(mockData.bands);
+  const [summary, setSummary] = useState(null);
+  const [bands, setBands] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -43,35 +25,73 @@ export const DashboardProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      const response = await dashboardAPI.getDashboard();
-      // 백엔드 응답: { success: true, data: {...} }
-      const data = response.data.data || response.data;
+      // 대시보드 요약 통계 로드
+      const summaryResponse = await dashboardAPI.getDashboard();
+      const summaryData = summaryResponse.data.data || summaryResponse.data;
+      setSummary(summaryData);
 
-      setAlerts(data.alerts || mockData.alerts);
-      setEvents(data.events || []);
-      setWeeklyStats(data.weeklyStats || []);
-      setBandLocations(data.bandLocations || []);
+      // 최근 이벤트/알림 로드
+      const eventsResponse = await dashboardAPI.getEvents(20);
+      const eventsData = eventsResponse.data.data || eventsResponse.data;
+
+      // 이벤트를 alerts 형식으로 변환
+      const alertsData = eventsData.map(event => ({
+        id: event.id,
+        dbId: event.id,
+        userName: event.wearer_name || event.bid,
+        message: event.message,
+        level: event.event_level >= 3 ? 'danger' : 'warning',
+        bid: event.bid,
+        type: event.event_type,
+        datetime: event.datetime,
+      }));
+
+      setAlerts(alertsData);
+      setEvents(eventsData);
     } catch (error) {
       console.error('Failed to load dashboard:', error);
-      // API 실패 시 이미 설정된 Mock 데이터 유지
+      setError(error.message);
     } finally {
       setLoading(false);
     }
-  }, [mockData.alerts]);
+  }, []);
 
   // 밴드 목록 로드
   const loadBands = useCallback(async () => {
     try {
-      const response = await dashboardAPI.getBands();
-      // 백엔드 응답: { success: true, data: [...] }
+      // 밴드 상태 요약 로드 (센서 데이터 포함) - 우선 시도
+      let response;
+      try {
+        response = await dashboardAPI.getBandsStatus();
+      } catch (err) {
+        // 404 에러 시 폴백: 기본 밴드 목록 사용
+        console.warn('bands-status endpoint not available, using bands/list fallback');
+        response = await dashboardAPI.getBands();
+      }
+
       const bandsData = response.data.data || response.data;
       console.log('Loaded bands:', bandsData);
-      setBands(Array.isArray(bandsData) ? bandsData : mockData.bands);
+
+      // 백엔드 데이터를 프론트엔드 형식으로 변환
+      const formattedBands = bandsData.map(band => ({
+        id: band.bid,
+        name: band.wearer_name,
+        band_id: band.bid,
+        status: band.connect_state === 1 ? 'online' : 'offline',
+        hr: band.latest_hr || '-',
+        spo2: band.latest_spo2 ? `${band.latest_spo2}%` : '-',
+        battery: band.battery || 0,
+        stimulator_connected: band.stimulator_connected,
+        last_data_at: band.last_data_at,
+        event_count_24h: band.event_count_24h || 0,
+      }));
+
+      setBands(formattedBands);
     } catch (error) {
       console.error('Failed to load bands:', error);
-      // API 실패 시 이미 설정된 Mock 데이터 유지
+      setError(error.message);
     }
-  }, [mockData.bands]);
+  }, []);
 
   // 알림 추가 (Socket에서 호출)
   const addAlert = useCallback((alert) => {
@@ -92,12 +112,7 @@ export const DashboardProvider = ({ children }) => {
   const updateBandStatus = useCallback((bandId, status) => {
     setBands((prev) =>
       prev.map((band) =>
-        band.id === bandId ? { ...band, ...status } : band
-      )
-    );
-    setBandLocations((prev) =>
-      prev.map((location) =>
-        location.id === bandId ? { ...location, ...status } : location
+        band.band_id === bandId ? { ...band, ...status } : band
       )
     );
   }, []);
@@ -106,16 +121,14 @@ export const DashboardProvider = ({ children }) => {
   const clearData = useCallback(() => {
     setAlerts([]);
     setEvents([]);
-    setWeeklyStats([]);
-    setBandLocations([]);
+    setSummary(null);
     setBands([]);
   }, []);
 
   const value = {
     alerts,
     events,
-    weeklyStats,
-    bandLocations,
+    summary,
     bands,
     loading,
     error,

@@ -5,11 +5,12 @@
 
 from datetime import datetime, timedelta
 from sqlalchemy import func, desc
-from backend import db
+# Import 순서 중요: db 패키지를 먼저 import한 후 SQLAlchemy 인스턴스를 import
 from backend.db.table import (
     User, Band, SensorData, Event, Group,
     NerveStimSession, NerveStimHistory, BloodPressure, Prescription
 )
+from backend import db
 
 
 # ============================================================
@@ -18,25 +19,25 @@ from backend.db.table import (
 
 def get_band_by_bid(bid):
     """밴드 ID로 밴드 조회"""
-    return Band.query.filter_by(bid=bid, is_active=True).first()
+    return Band.query.filter_by(bid=bid, ).first()
 
 
 def get_band_by_id(band_id):
     """내부 ID로 밴드 조회"""
-    return Band.query.filter_by(id=band_id, is_active=True).first()
+    return Band.query.filter_by(id=band_id, ).first()
 
 
 def get_all_bands(include_inactive=False):
     """모든 밴드 목록 조회"""
     query = Band.query
     if not include_inactive:
-        query = query.filter_by(is_active=True)
+        query = query.filter_by()
     return query.order_by(Band.id).all()
 
 
 def get_online_bands():
     """온라인 상태 밴드 목록 조회"""
-    return Band.query.filter_by(connect_state=1, is_active=True).all()
+    return Band.query.filter_by(connect_state=1, ).all()
 
 
 def get_bands_by_user(user_id):
@@ -46,7 +47,7 @@ def get_bands_by_user(user_id):
     return db.session.query(Band)\
         .join(UserBand, Band.id == UserBand.band_id)\
         .filter(UserBand.user_id == user_id)\
-        .filter(Band.is_active == True)\
+        .filter(True)\
         .all()
 
 
@@ -124,26 +125,34 @@ def get_events_by_band(bid, limit=50, unresolved_only=False):
         return []
     
     query = Event.query.filter_by(FK_bid=band.id)
-    
+
     if unresolved_only:
-        query = query.filter_by(is_resolved=False)
-    
+        query = query.filter(Event.action_status != 2)
+
     return query.order_by(desc(Event.datetime)).limit(limit).all()
 
 
 def get_recent_events(limit=100, event_level=None):
     """최근 이벤트 목록 조회"""
     query = Event.query
-    
+
     if event_level:
-        query = query.filter(Event.event_level >= event_level)
-    
+        # event_level을 type으로 변환
+        # level 1: 모든 이벤트
+        # level 2: type >= ?
+        # level 3: type in [6,7,8,9,10] (SOS, 낙상, 심박수높음, 심박수낮음, 산소포화도낮음)
+        # level 4: type in [6,7] (SOS, 낙상)
+        if event_level >= 4:
+            query = query.filter(Event.type.in_([6, 7]))
+        elif event_level >= 3:
+            query = query.filter(Event.type.in_([6, 7, 8, 9, 10]))
+
     return query.order_by(desc(Event.datetime)).limit(limit).all()
 
 
 def get_unread_events_count(bid=None):
     """읽지 않은 이벤트 수 조회"""
-    query = Event.query.filter_by(is_read=False)
+    query = Event.query.filter_by(action_status=0)
     
     if bid:
         band = get_band_by_bid(bid) if isinstance(bid, str) else Band.query.get(bid)
@@ -275,12 +284,13 @@ def get_all_users(include_inactive=False):
 
 def get_dashboard_statistics():
     """대시보드용 통계 데이터 조회"""
-    total_bands = Band.query.filter_by(is_active=True).count()
-    online_bands = Band.query.filter_by(is_active=True, connect_state=1).count()
-    unread_events = Event.query.filter_by(is_read=False).count()
+    total_bands = Band.query.count()
+    online_bands = Band.query.filter_by(connect_state=1).count()
+    unread_events = Event.query.filter_by(action_status=0).count()
+    # type: 6=SOS, 7=낙상, 8=심박수높음, 9=심박수낮음, 10=산소포화도낮음 (event_level >= 3)
     urgent_events = Event.query.filter(
-        Event.is_resolved == False,
-        Event.event_level >= 3
+        Event.action_status != 2,
+        Event.type.in_([6, 7, 8, 9, 10])
     ).count()
     
     # 오늘의 자극 세션 수

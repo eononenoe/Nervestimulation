@@ -54,15 +54,17 @@ def create_app(config_name='development'):
     socketio.init_app(
         app,
         cors_allowed_origins=app.config.get('CORS_ORIGINS', '*'),
-        async_mode='eventlet',
+        async_mode='gevent',
         logger=True,
         engineio_logger=True
     )
     
     # 데이터베이스 테이블 생성
-    with app.app_context():
-        from .db.table import table_band, table_nervestim
-        db.create_all()
+    # 주석: 중복 정의 방지를 위해 주석 처리
+    # 데이터베이스 마이그레이션은 'python manage.py db upgrade' 사용
+    # with app.app_context():
+    #     from .db.table import table_band, table_nervestim
+    #     db.create_all()
     
     # Blueprint 등록
     register_blueprints(app)
@@ -85,23 +87,32 @@ def register_blueprints(app):
     """API Blueprint 등록"""
     from .api.api_band import band_bp
     from .api.api_nervestim import nervestim_bp
-    from .api.api_create import create_api_blueprints
-    
+    from .api.dashboard import dashboard_bp
+    # from .api.api_create import create_api_blueprints
+
     # 커스텀 API
     app.register_blueprint(band_bp, url_prefix='/api/Wellsafer/v1')
     app.register_blueprint(nervestim_bp, url_prefix='/api/Wellsafer/v1')
-    
-    # Flask-Restless 자동 생성 API
-    create_api_blueprints(app)
+    app.register_blueprint(dashboard_bp, url_prefix='/api/Wellsafer/v1/dashboard')
+
+    # Flask-Restless 자동 생성 API (임시로 주석 처리)
+    # create_api_blueprints(app)
 
 
 def register_mqtt_handlers(app):
     """MQTT 핸들러 등록"""
-    from .api import mqtt as mqtt_handler
-    from .api import mqtt_nervestim
-    
-    mqtt_handler.register_handlers(mqtt, socketio, app)
-    mqtt_nervestim.register_handlers(mqtt, socketio, app)
+    # 커스텀 MQTT 클라이언트 초기화 (paho-mqtt 사용)
+    from .mqtt_client import init_mqtt
+    init_mqtt(app, socketio)
+
+    # 기존 Flask-MQTT 핸들러도 등록 (호환성)
+    try:
+        from .api import mqtt as mqtt_handler
+        from .api import mqtt_nervestim
+        mqtt_handler.register_handlers(mqtt, socketio, app)
+        mqtt_nervestim.register_handlers(mqtt, socketio, app)
+    except Exception as e:
+        app.logger.warning(f"Flask-MQTT handlers registration failed: {e}")
 
 
 def register_socket_handlers(app):
@@ -114,3 +125,7 @@ def start_background_threads(app):
     """백그라운드 스레드 시작"""
     from .api import thread
     thread.start_threads(app, socketio)
+
+
+# 애플리케이션 인스턴스 생성
+app = create_app('development')
