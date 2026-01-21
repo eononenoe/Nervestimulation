@@ -228,3 +228,4 @@ class EndReason:
     TIMEOUT = 'timeout'          # 타임아웃
     DISCONNECTED = 'disconnected'  # 연결 끊김
     LOW_BATTERY = 'low_battery'  # 배터리 부족
+    SYSTEM_CLEANUP = 'system_cleanup'  # 시스템 정리 (좀비 세션 자동 종료)

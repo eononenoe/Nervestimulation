@@ -289,6 +289,24 @@ def insert_bloodpressure(bid, systolic, diastolic, pulse=None, measurement_type=
     return bp.id
 
 
+def insert_nervestim_history(history_data):
+    """
+    신경자극 세션 히스토리 저장
+
+    Args:
+        history_data: 히스토리 데이터 딕셔너리
+
+    Returns:
+        int: 삽입된 레코드 ID
+    """
+    history = NerveStimHistory(**history_data)
+
+    db.session.add(history)
+    db.session.commit()
+
+    return history.id
+
+
 # ============================================================
 # 사용자 관련
 # ============================================================

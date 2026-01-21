@@ -118,11 +118,15 @@ def create_session():
     current_app.logger.info(f"[NERVESTIM] 활성 세션 확인: {active.session_id if active else '없음'}")
 
     if active:
-        current_app.logger.error(f"[NERVESTIM] 이미 진행중인 세션 존재: {active.session_id}")
-        return jsonify({
-            'error': 'Active session exists',
-            'session_id': active.session_id
-        }), 409
+        # 기존 활성 세션을 자동으로 종료 처리 (좀비 세션 정리)
+        current_app.logger.warning(f"[NERVESTIM] 기존 활성 세션 자동 종료: {active.session_id}")
+        query.update_nervestim_status(
+            active.session_id,
+            SessionStatus.STOPPED,
+            ended_at=datetime.utcnow(),
+            end_reason=EndReason.SYSTEM_CLEANUP
+        )
+        current_app.logger.info(f"[NERVESTIM] 기존 세션 종료 완료, 새 세션 생성 진행")
 
     # 테스트를 위해 신경자극기 연결 확인 주석 처리
     # if not band.stimulator_connected:
@@ -149,13 +153,15 @@ def create_session():
         current_app.logger.info(f"[NERVESTIM] 세션 생성 성공: {session_id}")
 
         # 세션을 즉시 시작 상태로 변경
+        query.update_nervestim_status(
+            session_id,
+            SessionStatus.RUNNING,
+            started_at=datetime.utcnow()
+        )
+        current_app.logger.info(f"[NERVESTIM] 세션 자동 시작: {session_id}")
+
         session = select.get_nervestim_session(session_id)
         if session:
-            session.status = SessionStatus.RUNNING  # 1: 진행중
-            session.started_at = datetime.utcnow()
-            db.session.commit()
-
-            current_app.logger.info(f"[NERVESTIM] 세션 자동 시작: {session_id}")
 
             # MQTT로 기기에 시작 명령 전송
             mqtt_topic = f'/DT/eHG4/NerveStim/Start'
@@ -300,12 +306,13 @@ def start_session(session_id):
 def stop_session(session_id):
     """신경자극 중지"""
     session = select.get_nervestim_session(session_id)
-    
+
     if not session:
         return jsonify({'error': 'Session not found'}), 404
-    
-    if session.status != SessionStatus.RUNNING:
-        return jsonify({'error': 'Session is not running'}), 400
+
+    # 대기중(0) 또는 진행중(1) 세션만 종료 가능
+    if session.status not in [SessionStatus.PENDING, SessionStatus.RUNNING]:
+        return jsonify({'error': 'Session is not active (already stopped or completed)'}), 400
     
     band = Band.query.get(session.FK_bid)
     
@@ -504,24 +511,23 @@ def _save_session_history(session):
     if bp_before and bp_after:
         bp_change = bp_after.systolic - bp_before.systolic
     
-    history = NerveStimHistory(
-        session_id=session.session_id,
-        FK_bid=session.FK_bid,
-        stimulator_id=session.stimulator_id,
-        stim_level=session.stim_level,
-        frequency=session.frequency,
-        pulse_width=session.pulse_width,
-        duration_planned=session.duration,
-        duration_actual=duration_actual,
-        started_at=session.started_at,
-        ended_at=session.ended_at,
-        end_reason=session.end_reason,
-        bp_systolic_before=bp_before.systolic if bp_before else None,
-        bp_diastolic_before=bp_before.diastolic if bp_before else None,
-        bp_systolic_after=bp_after.systolic if bp_after else None,
-        bp_diastolic_after=bp_after.diastolic if bp_after else None,
-        bp_change=bp_change
-    )
-    
-    db.session.add(history)
-    db.session.commit()
+    history_data = {
+        'session_id': session.session_id,
+        'FK_bid': session.FK_bid,
+        'stimulator_id': session.stimulator_id,
+        'stim_level': session.stim_level,
+        'frequency': session.frequency,
+        'pulse_width': session.pulse_width,
+        'duration_planned': session.duration,
+        'duration_actual': duration_actual,
+        'started_at': session.started_at,
+        'ended_at': session.ended_at,
+        'end_reason': session.end_reason,
+        'bp_systolic_before': bp_before.systolic if bp_before else None,
+        'bp_diastolic_before': bp_before.diastolic if bp_before else None,
+        'bp_systolic_after': bp_after.systolic if bp_after else None,
+        'bp_diastolic_after': bp_after.diastolic if bp_after else None,
+        'bp_change': bp_change
+    }
+
+    query.insert_nervestim_history(history_data)

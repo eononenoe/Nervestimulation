@@ -27,6 +27,10 @@ const NerveStimScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // 세션 상세 모달
+  const [selectedSession, setSelectedSession] = useState(null);
+  const [sessionModalVisible, setSessionModalVisible] = useState(false);
+
   // 새 세션 생성 폼 상태
   const [selectedBand, setSelectedBand] = useState('');
   const [bandOpen, setBandOpen] = useState(false);
@@ -110,6 +114,25 @@ const NerveStimScreen = () => {
     } catch (error) {
       console.error('Failed to create session:', error);
       Alert.alert('오류', error.response?.data?.message || '세션 생성에 실패했습니다.');
+    }
+  };
+
+  // 세션 클릭 핸들러
+  const handleSessionClick = (session) => {
+    setSelectedSession(session);
+    setSessionModalVisible(true);
+  };
+
+  // 세션 종료
+  const stopSession = async (sessionId) => {
+    try {
+      await nerveStimAPI.stopSession(sessionId, {});
+      Alert.alert('성공', '세션이 종료되었습니다');
+      setSessionModalVisible(false);
+      fetchSessions();
+    } catch (error) {
+      console.error('Failed to stop session:', error);
+      Alert.alert('오류', '세션 종료에 실패했습니다.');
     }
   };
 
@@ -504,9 +527,11 @@ const NerveStimScreen = () => {
                     const change = session.bp_change != null ? `${session.bp_change > 0 ? '-' : '+'}${Math.abs(session.bp_change)}` : '-';
 
                     return (
-                      <View
+                      <TouchableOpacity
                         key={session.id}
                         style={[styles.tableRow, index < sessions.length - 1 && styles.tableBorder]}
+                        onPress={() => handleSessionClick(session)}
+                        activeOpacity={0.7}
                       >
                         <Text style={[styles.tableCell, styles.colBandId]}>
                           {session.bid ? session.bid.slice(-4) : '-'}
@@ -533,7 +558,7 @@ const NerveStimScreen = () => {
                         <View style={[styles.tableCell, styles.colStatus]}>
                           {getStatusChip(session.status)}
                         </View>
-                      </View>
+                      </TouchableOpacity>
                     );
                   })}
                 </View>
@@ -544,6 +569,173 @@ const NerveStimScreen = () => {
           <View style={{ height: spacing.xxl }} />
         </ScrollView>
       </SafeAreaView>
+
+      {/* 세션 상세 모달 */}
+      <Modal
+        visible={sessionModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSessionModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {selectedSession && (
+              <>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>세션 상세</Text>
+                  <TouchableOpacity
+                    onPress={() => setSessionModalVisible(false)}
+                    style={styles.modalCloseButton}
+                  >
+                    <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                  {/* 상태 배지 */}
+                  <View style={styles.modalStatusContainer}>
+                    {getStatusChip(selectedSession.status)}
+                  </View>
+
+                  {/* 세션 ID */}
+                  <View style={styles.modalInfoRow}>
+                    <Text style={styles.modalLabel}>세션 ID</Text>
+                    <Text style={styles.modalValue}>{selectedSession.session_id}</Text>
+                  </View>
+
+                  {/* 사용자 정보 */}
+                  <View style={styles.modalInfoRow}>
+                    <Text style={styles.modalLabel}>사용자</Text>
+                    <Text style={styles.modalValue}>{selectedSession.wearer_name || '-'}</Text>
+                  </View>
+
+                  {/* 밴드 ID */}
+                  <View style={styles.modalInfoRow}>
+                    <Text style={styles.modalLabel}>밴드 ID</Text>
+                    <Text style={styles.modalValue}>{selectedSession.bid || '-'}</Text>
+                  </View>
+
+                  {/* 자극 설정 */}
+                  <View style={styles.modalDivider} />
+                  <Text style={styles.modalSectionTitle}>자극 설정</Text>
+
+                  <View style={styles.modalInfoRow}>
+                    <Text style={styles.modalLabel}>자극 단계</Text>
+                    <Text style={styles.modalValue}>단계 {selectedSession.stim_level}</Text>
+                  </View>
+
+                  <View style={styles.modalInfoRow}>
+                    <Text style={styles.modalLabel}>주파수</Text>
+                    <Text style={styles.modalValue}>{selectedSession.frequency} Hz</Text>
+                  </View>
+
+                  <View style={styles.modalInfoRow}>
+                    <Text style={styles.modalLabel}>펄스 폭</Text>
+                    <Text style={styles.modalValue}>{selectedSession.pulse_width} μs</Text>
+                  </View>
+
+                  <View style={styles.modalInfoRow}>
+                    <Text style={styles.modalLabel}>목표 신경</Text>
+                    <Text style={styles.modalValue}>{selectedSession.target_nerve || '-'}</Text>
+                  </View>
+
+                  <View style={styles.modalInfoRow}>
+                    <Text style={styles.modalLabel}>예정 시간</Text>
+                    <Text style={styles.modalValue}>{selectedSession.duration}분</Text>
+                  </View>
+
+                  {selectedSession.duration_actual && (
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalLabel}>실제 시간</Text>
+                      <Text style={styles.modalValue}>{selectedSession.duration_actual}분</Text>
+                    </View>
+                  )}
+
+                  {/* 시간 정보 */}
+                  <View style={styles.modalDivider} />
+                  <Text style={styles.modalSectionTitle}>시간 정보</Text>
+
+                  {selectedSession.started_at && (
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalLabel}>시작 시간</Text>
+                      <Text style={styles.modalValue}>
+                        {new Date(selectedSession.started_at).toLocaleString('ko-KR')}
+                      </Text>
+                    </View>
+                  )}
+
+                  {selectedSession.ended_at && (
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalLabel}>종료 시간</Text>
+                      <Text style={styles.modalValue}>
+                        {new Date(selectedSession.ended_at).toLocaleString('ko-KR')}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* 혈압 정보 */}
+                  {(selectedSession.bp_systolic_before || selectedSession.bp_systolic_after) && (
+                    <>
+                      <View style={styles.modalDivider} />
+                      <Text style={styles.modalSectionTitle}>혈압 정보</Text>
+
+                      {selectedSession.bp_systolic_before && (
+                        <View style={styles.modalInfoRow}>
+                          <Text style={styles.modalLabel}>자극 전 혈압</Text>
+                          <Text style={styles.modalValue}>
+                            {selectedSession.bp_systolic_before}/{selectedSession.bp_diastolic_before} mmHg
+                          </Text>
+                        </View>
+                      )}
+
+                      {selectedSession.bp_systolic_after && (
+                        <View style={styles.modalInfoRow}>
+                          <Text style={styles.modalLabel}>자극 후 혈압</Text>
+                          <Text style={styles.modalValue}>
+                            {selectedSession.bp_systolic_after}/{selectedSession.bp_diastolic_after} mmHg
+                          </Text>
+                        </View>
+                      )}
+
+                      {selectedSession.bp_change != null && (
+                        <View style={styles.modalInfoRow}>
+                          <Text style={styles.modalLabel}>혈압 변화</Text>
+                          <Text style={[styles.modalValue, styles.textGreen]}>
+                            {selectedSession.bp_change > 0 ? '-' : '+'}{Math.abs(selectedSession.bp_change)} mmHg
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+
+                  {selectedSession.end_reason && (
+                    <>
+                      <View style={styles.modalDivider} />
+                      <View style={styles.modalInfoRow}>
+                        <Text style={styles.modalLabel}>종료 사유</Text>
+                        <Text style={styles.modalValue}>{selectedSession.end_reason}</Text>
+                      </View>
+                    </>
+                  )}
+                </ScrollView>
+
+                {/* 하단 버튼 */}
+                {(selectedSession.status === 0 || selectedSession.status === 1) && (
+                  <View style={styles.modalFooter}>
+                    <TouchableOpacity
+                      style={styles.stopButton}
+                      onPress={() => stopSession(selectedSession.session_id)}
+                    >
+                      <MaterialCommunityIcons name="stop" size={20} color="white" />
+                      <Text style={styles.stopButtonText}>세션 종료</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </>
   );
 };
@@ -715,6 +907,92 @@ const styles = StyleSheet.create({
   },
   textGreen: {
     color: colors.primary,
+  },
+  // 모달 스타일
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '90%',
+    maxHeight: '85%',
+    backgroundColor: 'white',
+    borderRadius: scaleSize(16),
+    ...shadow.medium,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  modalTitle: {
+    fontSize: scaleFontSize(16),
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  modalCloseButton: {
+    padding: scaleSize(4),
+  },
+  modalBody: {
+    padding: spacing.md,
+    maxHeight: scaleSize(500),
+  },
+  modalStatusContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  modalInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: spacing.sm,
+  },
+  modalLabel: {
+    fontSize: scaleFontSize(12),
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  modalValue: {
+    fontSize: scaleFontSize(12),
+    color: colors.text,
+    fontWeight: '500',
+    flex: 2,
+    textAlign: 'right',
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: colors.borderLight,
+    marginVertical: spacing.md,
+  },
+  modalSectionTitle: {
+    fontSize: scaleFontSize(13),
+    fontWeight: '600',
+    color: colors.primary,
+    marginBottom: spacing.xs,
+  },
+  modalFooter: {
+    padding: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  stopButton: {
+    backgroundColor: '#E53935',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: scaleSize(12),
+    borderRadius: scaleSize(8),
+    gap: spacing.xs,
+  },
+  stopButtonText: {
+    color: 'white',
+    fontSize: scaleFontSize(14),
+    fontWeight: '600',
   },
 });
 
