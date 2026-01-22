@@ -96,8 +96,13 @@ const NerveStimScreen = () => {
     }
 
     try {
+      // 선택된 밴드의 stimulator_id 가져오기
+      const selectedBandInfo = bands.find(b => b.bid === selectedBand);
+      const stimulatorId = selectedBandInfo?.stimulator_id || `STIM-${selectedBand.slice(-6)}`;
+
       await nerveStimAPI.createSession({
         bid: selectedBand,
+        stimulator_id: stimulatorId,
         stim_level: parseInt(selectedLevel),
         duration: parseInt(selectedDuration),
         frequency: 10.0,

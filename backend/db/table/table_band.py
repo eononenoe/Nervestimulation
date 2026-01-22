@@ -116,11 +116,19 @@ class Band(db.Model):
 
     @property
     def stimulator_connected(self):
-        return False
+        return self._stimulator_connected or False
+
+    @stimulator_connected.setter
+    def stimulator_connected(self, value):
+        self._stimulator_connected = value
 
     @property
     def stimulator_id(self):
-        return None
+        return self._stimulator_id
+
+    @stimulator_id.setter
+    def stimulator_id(self, value):
+        self._stimulator_id = value
 
     @property
     def created_at(self):
@@ -204,6 +212,10 @@ class SensorData(db.Model):
     ssHr_dayMax = db.Column(db.Integer)
     temperature_dayMin = db.Column(db.Integer)
     temperature_dayMax = db.Column(db.Integer)
+
+    # 신경자극기 연결 상태
+    _stimulator_connected = db.Column('stimulator_connected', db.Boolean, default=False)
+    _stimulator_id = db.Column('stimulator_id', db.String(48))
 
     # 호환성을 위한 프로퍼티
     @property

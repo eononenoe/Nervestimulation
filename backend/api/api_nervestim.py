@@ -135,8 +135,11 @@ def create_session():
     
     # 세션 생성
     try:
+        # stimulator_id: 요청에서 받은 값 우선, 없으면 band에 저장된 값 사용
+        stimulator_id = data.get('stimulator_id') or band.stimulator_id
+
         session_data = {
-            'stimulator_id': band.stimulator_id,
+            'stimulator_id': stimulator_id,
             'stim_level': data.get('stim_level', 1),
             'frequency': data.get('frequency', 10.0),
             'pulse_width': data.get('pulse_width', 200),
